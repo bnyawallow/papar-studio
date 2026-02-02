@@ -349,7 +349,7 @@ const EmbedContent = React.memo(({ content, onLoad, isRunning }: { content: Cont
             </mesh>
 
             {hasError && (
-                <Text color="white" anchorX="center" anchorY="middle" fontSize={0.2} maxWidth={width} position={[0,0,0.1]} backgroundColor="#991b1b" padding={0.05}>
+                <Text color="white" anchorX="center" anchorY="middle" fontSize={0.2} maxWidth={width} position={[0,0,0.1]}>
                     VIDEO UNAVAILABLE
                 </Text>
             )}

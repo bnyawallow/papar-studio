@@ -1,4 +1,6 @@
 
+"use client";
+
 import React from 'react';
 import { XMarkIcon } from '../icons/Icons';
 import { Target } from '../../types';
@@ -96,7 +98,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, onClose, target }) 
             </div>
         </div>
 
-        <style jsx>{`
+        <style>{`
             @keyframes scan {
                 0% { background-position: 0% -100%; }
                 100% { background-position: 0% 200%; }

@@ -1,3 +1,4 @@
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   async headers() {
@@ -24,7 +25,6 @@ const nextConfig = {
   experimental: {
     esmExternals: 'loose'   // or true — tries to auto-handle ESM externals
   },
-  reactStrictMode: true,
 };
 
-module.exports = nextConfig;
+export default nextConfig;

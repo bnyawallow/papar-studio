@@ -195,7 +195,7 @@ export const AssetsModal: React.FC<AssetsModalProps> = ({ isOpen, onClose, onAdd
           try {
               const url = await fileToBase64(file);
               let type: Asset['type'] = 'image';
-              let thumbnail = url;
+              let thumbnail: string | undefined = url;
               if (file.type.startsWith('image/')) type = 'image';
               else if (file.type.startsWith('video/')) { type = 'video'; thumbnail = undefined; }
               else if (file.type.startsWith('audio/')) { type = 'audio'; thumbnail = undefined; }

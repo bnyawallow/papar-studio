@@ -7,7 +7,7 @@ declare global {
   namespace JSX {
     interface IntrinsicElements {
       chromaKeyMaterial: Object3DNode<THREE.ShaderMaterial, typeof THREE.ShaderMaterial> & {
-        tex?: THREE.Texture;
+        tex?: THREE.Texture | null;
         color?: THREE.Color;
       };
       // Allow any other standard HTML or Three elements

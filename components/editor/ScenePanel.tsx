@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import React, { useRef, useState, useEffect, Suspense, useMemo, useCallback } from 'react';
@@ -420,7 +419,8 @@ const EmbedContent = React.memo(({ content, onLoad, isRunning }: { content: Cont
 const VideoFileContent = ({ content, onLoad, isRunning }: { content: Content, onLoad?: (data: any) => void, isRunning: boolean }) => {
     const meshRef = useRef<THREE.Mesh>(null);
     const [aspect, setAspect] = useState(1.77); 
-    const [video] = useState(() => {
+    const [video] = useState<HTMLVideoElement | null>(() => {
+        if (typeof document === 'undefined') return null; // SSR Guard
         const vid = document.createElement('video');
         vid.crossOrigin = "Anonymous";
         vid.playsInline = true;
@@ -430,7 +430,7 @@ const VideoFileContent = ({ content, onLoad, isRunning }: { content: Content, on
     });
 
     useEffect(() => {
-        if(!content.videoUrl) return;
+        if(!content.videoUrl || !video) return;
         if (video.src !== content.videoUrl) { video.src = content.videoUrl; video.load(); }
         video.loop = !!content.loop;
         const shouldPlay = content.autoplay || (content.type === ContentType.VIDEO && isRunning && content.autoplay);
@@ -446,13 +446,14 @@ const VideoFileContent = ({ content, onLoad, isRunning }: { content: Content, on
     }, [content.videoUrl, content.loop, content.muted, content.autoplay, video, isRunning, content.type]);
 
     useEffect(() => {
+        if (!video) return;
         const onLoadedMetadata = () => { if (video.videoWidth && video.videoHeight) setAspect(video.videoWidth / video.videoHeight); };
         video.addEventListener('loadedmetadata', onLoadedMetadata);
         return () => video.removeEventListener('loadedmetadata', onLoadedMetadata);
     }, [video]);
 
     useEffect(() => { 
-        if(onLoad) {
+        if(onLoad && video) {
             onLoad({ 
                 videoElement: video,
                 player: {
@@ -476,11 +477,12 @@ const VideoFileContent = ({ content, onLoad, isRunning }: { content: Content, on
 
     const togglePlay = useCallback((e: any) => {
         e.stopPropagation();
-        if (!isRunning || !content.videoClickToggle) return;
+        if (!isRunning || !content.videoClickToggle || !video) return;
         if (video.paused) video.play(); else video.pause();
     }, [isRunning, content.videoClickToggle, video]);
 
     const texture = useMemo(() => {
+        if (!video) return null;
         const tex = new THREE.VideoTexture(video);
         tex.minFilter = THREE.LinearFilter;
         tex.magFilter = THREE.LinearFilter;
@@ -488,7 +490,11 @@ const VideoFileContent = ({ content, onLoad, isRunning }: { content: Content, on
         return tex;
     }, [video]);
 
-    useEffect(() => () => texture.dispose(), [texture]);
+    useEffect(() => {
+        return () => {
+            if (texture) texture.dispose();
+        }
+    }, [texture]);
     
     // Sanitize chromaKey color
     const chromaColor = useMemo(() => {
@@ -496,6 +502,11 @@ const VideoFileContent = ({ content, onLoad, isRunning }: { content: Content, on
         if (!c || c === 'transparent') return new THREE.Color(0x00ff00);
         return new THREE.Color(c);
     }, [content.chromaColor]);
+
+    if (!texture) {
+        // Fallback or invisible placeholder during loading/SSR
+        return null;
+    }
 
     return (
         <mesh ref={meshRef} onClick={togglePlay}>
@@ -509,16 +520,17 @@ const VideoFileContent = ({ content, onLoad, isRunning }: { content: Content, on
     );
 }
 
-const AudioContent = ({ content, onLoad, listener }: { content: Content, onLoad?: (data: any) => void, listener: THREE.AudioListener }) => {
+const AudioContent = ({ content, onLoad, listener }: { content: Content, onLoad?: (data: any) => void, listener: THREE.AudioListener | null }) => {
     const sound = useRef<THREE.PositionalAudio>(null!);
-    const [audio] = useState(() => {
+    const [audio] = useState<HTMLAudioElement | null>(() => {
+        if (typeof Audio === 'undefined') return null; // SSR Guard
         const a = new Audio();
         a.crossOrigin = 'Anonymous';
         return a;
     });
 
     useEffect(() => {
-        if (!content.audioUrl || !listener) return;
+        if (!content.audioUrl || !listener || !audio) return;
         if (audio.src !== content.audioUrl) audio.src = content.audioUrl;
         audio.loop = !!content.loop;
         if (sound.current && sound.current.mediaElement !== audio) {
@@ -531,10 +543,14 @@ const AudioContent = ({ content, onLoad, listener }: { content: Content, onLoad?
     }, [content.audioUrl, content.loop, content.autoplay, listener, onLoad, audio]);
 
     useEffect(() => () => {
-        audio.pause();
-        if(sound.current && sound.current.isPlaying) sound.current.stop();
-        if(sound.current && sound.current.source) sound.current.disconnect();
+        if (audio) {
+            audio.pause();
+            if(sound.current && sound.current.isPlaying) sound.current.stop();
+            if(sound.current && sound.current.source) sound.current.disconnect();
+        }
     }, [audio]);
+
+    if (!listener || !audio) return null;
 
     return (
         <group>
@@ -567,11 +583,17 @@ const SceneContent = ({
 }) => {
     const { handleScriptClick, error } = useScriptEngine(target, contentRefs, isRunning);
     const { camera } = useThree();
-    const [listener] = useState(() => new THREE.AudioListener());
+    
+    const [listener] = useState<THREE.AudioListener | null>(() => {
+        if (typeof window === 'undefined') return null; // SSR Guard
+        return new THREE.AudioListener();
+    });
 
     useEffect(() => {
-        camera.add(listener);
-        return () => { camera.remove(listener); };
+        if (listener) {
+            camera.add(listener);
+            return () => { camera.remove(listener); };
+        }
     }, [camera, listener]);
 
     useEffect(() => { onError(error); }, [error, onError]);

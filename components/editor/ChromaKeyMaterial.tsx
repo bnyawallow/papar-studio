@@ -5,7 +5,7 @@ import { extend } from '@react-three/fiber';
 
 const ChromaKeyMaterialImpl = shaderMaterial(
   {
-    tex: undefined,
+    tex: null,
     color: new THREE.Color(0x00ff00), // Default Green
   },
   // Vertex Shader

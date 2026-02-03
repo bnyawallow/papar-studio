@@ -357,7 +357,7 @@ const EmbedContent = React.memo(({ content, onLoad, isRunning }: { content: Cont
             {isRunning && videoUrl && !hasError && (
                 <Html
                     transform
-                    factor={1}
+                    // factor prop removed to satisfy TS check. Default is 1.
                     position={[0, 0, 0.05]}
                     scale={scale} 
                     rotation={[0, 0, 0]}

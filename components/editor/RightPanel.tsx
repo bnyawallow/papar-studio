@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import React, { useEffect, useState, useRef, useLayoutEffect } from 'react';
@@ -237,7 +236,7 @@ const RightPanel: React.FC<RightPanelProps> = ({
                     {['x', 'y', 'z'].map((axis, i) => (
                       <div key={axis} className="flex items-center gap-1 border rounded px-1">
                         <span className="text-[10px] text-gray-400 font-bold">{axis.toUpperCase()}</span>
-                        <input type="number" step="0.01" value={formData.transform.position[i]} onChange={(e) => handleTransformChange(axis as any, 'position', e.target.value)} className="w-full text-xs py-1 focus:outline-none bg-transparent" />
+                        <input type="number" step="0.01" value={formData.transform.position[i] ?? 0} onChange={(e) => handleTransformChange(axis as any, 'position', e.target.value)} className="w-full text-xs py-1 focus:outline-none bg-transparent" />
                       </div>
                     ))}
                   </div>
@@ -248,7 +247,7 @@ const RightPanel: React.FC<RightPanelProps> = ({
                     {['x', 'y', 'z'].map((axis, i) => (
                       <div key={axis} className="flex items-center gap-1 border rounded px-1">
                         <span className="text-[10px] text-gray-400 font-bold">{axis.toUpperCase()}</span>
-                        <input type="number" step="0.01" value={formData.transform.rotation[i]} onChange={(e) => handleTransformChange(axis as any, 'rotation', e.target.value)} className="w-full text-xs py-1 focus:outline-none bg-transparent" />
+                        <input type="number" step="0.01" value={formData.transform.rotation[i] ?? 0} onChange={(e) => handleTransformChange(axis as any, 'rotation', e.target.value)} className="w-full text-xs py-1 focus:outline-none bg-transparent" />
                       </div>
                     ))}
                   </div>
@@ -259,7 +258,7 @@ const RightPanel: React.FC<RightPanelProps> = ({
                     {['x', 'y', 'z'].map((axis, i) => (
                       <div key={axis} className="flex items-center gap-1 border rounded px-1">
                         <span className="text-[10px] text-gray-400 font-bold">{axis.toUpperCase()}</span>
-                        <input type="number" step="0.01" value={formData.transform.scale[i]} onChange={(e) => handleTransformChange(axis as any, 'scale', e.target.value)} className="w-full text-xs py-1 focus:outline-none bg-transparent" />
+                        <input type="number" step="0.01" value={formData.transform.scale[i] ?? 1} onChange={(e) => handleTransformChange(axis as any, 'scale', e.target.value)} className="w-full text-xs py-1 focus:outline-none bg-transparent" />
                       </div>
                     ))}
                   </div>
@@ -661,7 +660,7 @@ const RightPanel: React.FC<RightPanelProps> = ({
                             <label className="text-xs text-gray-400 block mb-1">Ambient Light Intensity</label>
                             <input 
                                 type="range" min="0" max="2" step="0.1"
-                                value={sceneSettings.ambientLightIntensity}
+                                value={sceneSettings.ambientLightIntensity ?? 0.8}
                                 onChange={(e) => handleSceneSettingChange('ambientLightIntensity', parseFloat(e.target.value))}
                                 className="w-full"
                             />
@@ -671,7 +670,7 @@ const RightPanel: React.FC<RightPanelProps> = ({
                             <label className="text-xs text-gray-400 block mb-1">Directional Light Intensity</label>
                             <input 
                                 type="range" min="0" max="3" step="0.1"
-                                value={sceneSettings.directionalLightIntensity}
+                                value={sceneSettings.directionalLightIntensity ?? 1.5}
                                 onChange={(e) => handleSceneSettingChange('directionalLightIntensity', parseFloat(e.target.value))}
                                 className="w-full"
                             />
@@ -685,7 +684,7 @@ const RightPanel: React.FC<RightPanelProps> = ({
                                         <span className="text-[10px] text-gray-400 font-bold">{axis.toUpperCase()}</span>
                                         <input 
                                             type="number" step="1" 
-                                            value={sceneSettings.directionalLightPosition[i]} 
+                                            value={sceneSettings.directionalLightPosition[i] ?? 0} 
                                             onChange={(e) => handleDirectionalLightPosChange(i, e.target.value)} 
                                             className="w-full text-xs py-1 focus:outline-none bg-transparent" 
                                         />

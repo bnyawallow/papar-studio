@@ -357,7 +357,6 @@ const EmbedContent = React.memo(({ content, onLoad, isRunning }: { content: Cont
             {isRunning && videoUrl && !hasError && (
                 <Html
                     transform
-                    // factor prop removed to satisfy TS check. Default is 1.
                     position={[0, 0, 0.05]}
                     scale={scale} 
                     rotation={[0, 0, 0]}
@@ -528,15 +527,24 @@ const AudioContent = ({ content, onLoad, listener }: { content: Content, onLoad?
         a.crossOrigin = 'Anonymous';
         return a;
     });
+    
+    // Track which audio instance is currently connected to the PositionalAudio
+    // to avoid type errors when checking properties that don't exist on standard THREE types
+    // and to avoid unnecessary reconnections.
+    const connectedRef = useRef<THREE.PositionalAudio | null>(null);
 
     useEffect(() => {
         if (!content.audioUrl || !listener || !audio) return;
         if (audio.src !== content.audioUrl) audio.src = content.audioUrl;
         audio.loop = !!content.loop;
-        if (sound.current && sound.current.mediaElement !== audio) {
+        
+        // Ensure source is connected to this specific sound instance
+        if (sound.current && connectedRef.current !== sound.current) {
             sound.current.setMediaElementSource(audio);
             sound.current.setRefDistance(1);
+            connectedRef.current = sound.current;
         }
+        
         if (onLoad) onLoad({ audioElement: audio });
         if (content.autoplay) audio.play().catch(e => console.error("Audio autoplay failed:", e));
         else if (!audio.paused) audio.pause();

@@ -3,7 +3,6 @@ import React, { useState, useCallback, useRef } from 'react';
 import { XMarkIcon, UploadIcon, ImageIcon, FileIcon, VideoIcon, AudioIcon, CubeIcon, ChevronLeftIcon, PlusIcon } from '../icons/Icons';
 import { Asset } from '../../types';
 import { fileToBase64 } from '../../utils/storage';
-import { compileImage } from '../../utils/compiler';
 
 // Placeholders
 const PLACEHOLDER_MIND = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIiBmaWxsPSJub25lIiBzdHJva2U9ImN1cnJlbnRDb2xvciI+PHJlY3QgeD0iMjAiIHk9IjIwIiB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHJ4PSI1IiBmaWxsPSIjZjBmZGY0IiBzdHJva2U9IiMxNmEzNGEiIHN0cm9rZS13aWR0aD0iMiIvPjxwYXRoIGQ9Ik0zNSA1MGwxMCAxMCAyMC0yMCIgc3Ryb2tlPSIjMTZhMzRhIiBzdHJva2Utd2lkdGg9IjUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPjx0ZXh0IHg9IjUwIiB5PSI5MCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1zaXplPSIxMiIgZmlsbD0iIzE2YTM0YSI+TUlORDwvdGV4dD48L3N2Zz4=";
@@ -17,7 +16,7 @@ interface AssetsModalProps {
   onAddAsset: (asset: Asset) => void;
 }
 
-type ViewMode = 'library' | 'create-target' | 'upload-video' | 'upload-model' | 'upload-image' | 'upload-audio';
+type ViewMode = 'library' | 'upload-image' | 'upload-video' | 'upload-model' | 'upload-audio';
 
 const getUniqueName = (baseName: string, existingNames: string[]): string => {
   if (!existingNames.includes(baseName)) return baseName;
@@ -34,86 +33,65 @@ const getUniqueName = (baseName: string, existingNames: string[]): string => {
   return `${name} ${counter}`;
 };
 
-const CreateTargetView = ({ onBack, onAdd, assets }: { onBack: () => void, onAdd: (asset: Asset) => void, assets: Asset[] }) => {
-    const [targetName, setTargetName] = useState('');
-    const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null);
-    const [selectedMindFile, setSelectedMindFile] = useState<File | null>(null);
-    const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
-    const [isDraggingImage, setIsDraggingImage] = useState(false);
-    const [isDraggingMind, setIsDraggingMind] = useState(false);
-    
-    const imageInputRef = useRef<HTMLInputElement>(null);
-    const mindInputRef = useRef<HTMLInputElement>(null);
+const UploadImageView = ({ onBack, onAdd, assets }: { onBack: () => void, onAdd: (asset: Asset) => void, assets: Asset[] }) => {
+    const [name, setName] = useState('');
+    const [selectedFile, setSelectedFile] = useState<File | null>(null);
+    const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+    const [isDragging, setIsDragging] = useState(false);
+    const inputRef = useRef<HTMLInputElement>(null);
 
-    const handleImageFileChange = (file: File) => {
+    const handleFileChange = (file: File) => {
         if (!file.type.startsWith('image/')) { alert("Invalid image file."); return; }
-        setSelectedImageFile(file);
-        if (!targetName) setTargetName(file.name.replace(/\.[^/.]+$/, ""));
+        setSelectedFile(file);
+        if (!name) setName(file.name.replace(/\.[^/.]+$/, ""));
         const reader = new FileReader();
-        reader.onloadend = () => setImagePreviewUrl(reader.result as string);
+        reader.onloadend = () => setPreviewUrl(reader.result as string);
         reader.readAsDataURL(file);
     };
 
-    const handleMindFileChange = (file: File) => {
-        if (!file.name.endsWith('.mind')) { alert("Invalid .mind file."); return; }
-        setSelectedMindFile(file);
-        if (!targetName) setTargetName(file.name.replace(/\.[^/.]+$/, ""));
-    };
-
     const handleAdd = async () => {
-        if (!selectedImageFile && !selectedMindFile) return;
+        if (!selectedFile) return;
         try {
-            let imageUrl = selectedImageFile ? await fileToBase64(selectedImageFile) : '';
-            let mindFileUrl = selectedMindFile ? await fileToBase64(selectedMindFile) : '';
-            const name = getUniqueName(targetName || 'Untitled', assets.map(a => a.name));
+            let imageUrl = await fileToBase64(selectedFile);
+            const assetName = getUniqueName(name || 'Untitled', assets.map(a => a.name));
             onAdd({
                 id: `asset_${Date.now()}`,
-                name,
-                type: mindFileUrl ? 'mind' : 'image',
-                url: mindFileUrl || imageUrl,
-                thumbnail: imageUrl || PLACEHOLDER_MIND
+                name: assetName,
+                type: 'image',
+                url: imageUrl,
+                thumbnail: imageUrl
             });
             onBack();
-        } catch (e) { alert("Failed to process files."); }
+        } catch (e) { alert("Failed to process file."); }
     };
 
     return (
         <div className="flex flex-col h-full">
             <div className="flex items-center gap-2 mb-4">
                 <button onClick={onBack} className="p-1 hover:bg-gray-100 rounded-full"><ChevronLeftIcon className="w-5 h-5 text-gray-600" /></button>
-                <h4 className="font-bold text-gray-800">Create Image Target</h4>
+                <h4 className="font-bold text-gray-800">Upload Image</h4>
             </div>
             <div className="flex-1 space-y-4">
                 <div className="space-y-1">
-                    <label className="block text-[10px] font-bold text-gray-500 uppercase">1. Tracker Image</label>
+                    <label className="block text-[10px] font-bold text-gray-500 uppercase">Image File</label>
                     <div 
-                        onClick={() => imageInputRef.current?.click()}
-                        onDragOver={(e) => { e.preventDefault(); setIsDraggingImage(true); }}
-                        onDragLeave={(e) => { e.preventDefault(); setIsDraggingImage(false); }}
-                        onDrop={(e) => { e.preventDefault(); setIsDraggingImage(false); if (e.dataTransfer.files[0]) handleImageFileChange(e.dataTransfer.files[0]); }}
-                        className={`border-2 border-dashed rounded-md h-32 flex flex-col items-center justify-center cursor-pointer transition-colors relative overflow-hidden ${isDraggingImage ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-blue-500 hover:bg-white'}`}
+                        onClick={() => inputRef.current?.click()}
+                        onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+                        onDragLeave={(e) => { e.preventDefault(); setIsDragging(false); }}
+                        onDrop={(e) => { e.preventDefault(); setIsDragging(false); if (e.dataTransfer.files[0]) handleFileChange(e.dataTransfer.files[0]); }}
+                        className={`border-2 border-dashed rounded-md h-40 flex flex-col items-center justify-center cursor-pointer transition-colors relative overflow-hidden ${isDragging ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-blue-500 hover:bg-white'}`}
                     >
-                        {imagePreviewUrl ? <img src={imagePreviewUrl} className="w-full h-full object-contain" /> : <div className="text-center text-gray-400"><ImageIcon className="w-8 h-8 mx-auto mb-1" /><span className="text-xs">Drop image here</span></div>}
+                        {previewUrl ? <img src={previewUrl} className="w-full h-full object-contain" /> : <div className="text-center text-gray-400"><ImageIcon className="w-8 h-8 mx-auto mb-1" /><span className="text-xs">Drop image here</span></div>}
                     </div>
-                    <input type="file" ref={imageInputRef} onChange={(e) => e.target.files && handleImageFileChange(e.target.files[0])} accept="image/*" className="hidden" />
+                    <input type="file" ref={inputRef} onChange={(e) => e.target.files && handleFileChange(e.target.files[0])} accept="image/*" className="hidden" />
                 </div>
-                <div className="space-y-1">
-                    <label className="block text-[10px] font-bold text-gray-500 uppercase">2. .mind File (Optional)</label>
-                    <div 
-                        onClick={() => mindInputRef.current?.click()}
-                        onDragOver={(e) => { e.preventDefault(); setIsDraggingMind(true); }}
-                        onDragLeave={(e) => { e.preventDefault(); setIsDraggingMind(false); }}
-                        onDrop={(e) => { e.preventDefault(); setIsDraggingMind(false); if (e.dataTransfer.files[0]) handleMindFileChange(e.dataTransfer.files[0]); }}
-                        className={`border-2 border-dashed rounded-md h-24 flex flex-col items-center justify-center cursor-pointer transition-colors ${selectedMindFile ? 'border-green-500 bg-green-50' : 'border-gray-300 hover:border-blue-500 hover:bg-white'}`}
-                    >
-                        {selectedMindFile ? <div className="text-center text-green-700"><FileIcon className="w-6 h-6 mx-auto mb-1" /><span className="text-xs">{selectedMindFile.name}</span></div> : <div className="text-center text-gray-400"><FileIcon className="w-6 h-6 mx-auto mb-1" /><span className="text-xs">Drop .mind file</span></div>}
-                    </div>
-                    <input type="file" ref={mindInputRef} onChange={(e) => e.target.files && handleMindFileChange(e.target.files[0])} accept=".mind" className="hidden" />
-                </div>
-                <input type="text" value={targetName} onChange={(e) => setTargetName(e.target.value)} placeholder="Target Name" className="w-full px-3 py-2 border rounded-md" />
+                <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Asset Name" className="w-full px-3 py-2 border rounded-md" />
+                <p className="text-xs text-gray-500">
+                    This image can be used as a Target (for tracking) or as content (displayed in the scene).
+                </p>
             </div>
             <div className="mt-4 pt-4 border-t flex justify-end">
-                <button onClick={handleAdd} disabled={!selectedImageFile && !selectedMindFile} className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 font-medium">Create Target</button>
+                <button onClick={handleAdd} disabled={!selectedFile} className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 font-medium">Upload Image</button>
             </div>
         </div>
     );
@@ -182,8 +160,6 @@ const UploadFileView = ({ onBack, onAdd, assets, type, title, icon, accept }: { 
 
 export const AssetsModal: React.FC<AssetsModalProps> = ({ isOpen, onClose, onAddTarget, assets, onAddAsset }) => {
   const [view, setView] = useState<ViewMode>('library');
-  const [compilingAssetId, setCompilingAssetId] = useState<string | null>(null);
-  const [progress, setProgress] = useState(0);
   const genericInputRef = useRef<HTMLInputElement>(null);
 
   const handleGenericFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -212,18 +188,10 @@ export const AssetsModal: React.FC<AssetsModalProps> = ({ isOpen, onClose, onAdd
   }
 
   const handleAssetClick = async (asset: Asset) => {
-      if (asset.type === 'mind') { onAddTarget(asset); return; }
-      if (asset.type !== 'image') return;
-      if (compilingAssetId) return; 
-      
-      const imageUrl = asset.thumbnail || asset.url;
-      setCompilingAssetId(asset.id); 
-      setProgress(0);
-      try {
-          const mindFileUrl = await compileImage(imageUrl, (p) => setProgress(Math.round(p)));
-          onAddTarget({ ...asset, type: 'mind', url: mindFileUrl, thumbnail: imageUrl });
-      } catch (error) { alert("Failed to compile. Try manually uploading a .mind file."); } 
-      finally { setCompilingAssetId(null); setProgress(0); }
+      // In the new workflow, we just add the asset to the scene. 
+      // If it's an image, it becomes a target (uncompiled) or image content.
+      // Editor.tsx handles the logic of "Create Target from Asset" vs "Add Content".
+      onAddTarget(asset);
   };
 
   if (!isOpen) return null;
@@ -239,8 +207,8 @@ export const AssetsModal: React.FC<AssetsModalProps> = ({ isOpen, onClose, onAdd
         {view === 'library' ? (
             <div className="flex-1 flex flex-col min-h-0">
                 <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
-                    <button onClick={() => setView('create-target')} className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 rounded-md hover:bg-blue-100 border border-blue-200 transition-colors font-medium text-sm whitespace-nowrap">
-                        <ImageIcon className="w-4 h-4" /> New Image Target
+                    <button onClick={() => setView('upload-image')} className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 rounded-md hover:bg-blue-100 border border-blue-200 transition-colors font-medium text-sm whitespace-nowrap">
+                        <ImageIcon className="w-4 h-4" /> Upload Image
                     </button>
                     <button onClick={() => setView('upload-video')} className="flex items-center gap-2 px-4 py-2 bg-purple-50 text-purple-700 rounded-md hover:bg-purple-100 border border-purple-200 transition-colors font-medium text-sm whitespace-nowrap">
                         <VideoIcon className="w-4 h-4" /> New Video Clip
@@ -263,8 +231,7 @@ export const AssetsModal: React.FC<AssetsModalProps> = ({ isOpen, onClose, onAdd
                         <button 
                             key={`${asset.id}-${index}`} 
                             onClick={() => handleAssetClick(asset)}
-                            disabled={!!compilingAssetId}
-                            className={`group relative bg-white border rounded-md p-2 flex flex-col justify-between items-start hover:shadow-lg hover:border-blue-500 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 ${compilingAssetId === asset.id ? 'ring-2 ring-blue-500 bg-blue-50' : ''}`}
+                            className="group relative bg-white border rounded-md p-2 flex flex-col justify-between items-start hover:shadow-lg hover:border-blue-500 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500"
                             title={asset.name}
                         >
                             <div className="w-full h-24 mb-2 bg-gray-50 rounded-md overflow-hidden relative flex items-center justify-center">
@@ -278,12 +245,6 @@ export const AssetsModal: React.FC<AssetsModalProps> = ({ isOpen, onClose, onAdd
                                 </div>
                             </div>
                             <p className="text-[10px] text-gray-700 font-medium w-full text-center truncate px-1">{asset.name}</p>
-                            {compilingAssetId === asset.id && (
-                                <div className="absolute inset-0 bg-white bg-opacity-90 flex flex-col items-center justify-center rounded-md z-10">
-                                    <div className="w-6 h-6 border-3 border-blue-600 border-t-transparent rounded-full animate-spin mb-1"></div>
-                                    <span className="text-[9px] font-bold text-blue-800">{progress}%</span>
-                                </div>
-                            )}
                         </button>
                         ))}
                         {assets.length === 0 && (
@@ -296,7 +257,7 @@ export const AssetsModal: React.FC<AssetsModalProps> = ({ isOpen, onClose, onAdd
             </div>
         ) : (
             <div className="flex-1 min-h-0 bg-gray-50 rounded-lg p-6 border border-gray-200">
-                {view === 'create-target' && <CreateTargetView onBack={() => setView('library')} onAdd={onAddAsset} assets={assets} />}
+                {view === 'upload-image' && <UploadImageView onBack={() => setView('library')} onAdd={onAddAsset} assets={assets} />}
                 {view === 'upload-video' && <UploadFileView onBack={() => setView('library')} onAdd={onAddAsset} assets={assets} type="video" title="Upload Video Clip" icon={<VideoIcon className="w-8 h-8 mx-auto" />} accept="video/*" />}
                 {view === 'upload-model' && <UploadFileView onBack={() => setView('library')} onAdd={onAddAsset} assets={assets} type="model" title="Upload 3D Model" icon={<CubeIcon className="w-8 h-8 mx-auto" />} accept=".glb,.gltf" />}
                 {view === 'upload-audio' && <UploadFileView onBack={() => setView('library')} onAdd={onAddAsset} assets={assets} type="audio" title="Upload Audio" icon={<AudioIcon className="w-8 h-8 mx-auto" />} accept="audio/*" />}

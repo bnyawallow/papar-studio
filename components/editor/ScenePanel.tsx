@@ -16,6 +16,19 @@ import ReactPlayer from 'react-player';
 const PLACEHOLDER_MIND = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIiBmaWxsPSJub25lIiBzdHJva2U9ImN1cnJlbnRDb2xvciI+PHJlY3QgeD0iMjAiIHk9IjIwIiB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHJ4PSI1IiBmaWxsPSIjZjBmZGY0IiBzdHJva2U9IiMxNmEzNGEiIHN0cm9rZS13aWR0aD0iMiIvPjxwYXRoIGQ9Ik0zNSA1MGwxMCAxMCAyMC0yMCIgc3Ryb2tlPSIjMTZhMzRhIiBzdHJva2Utd2lkdGg9IjUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPjx0ZXh0IHg9IjUwIiB5PSI5MCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1zaXplPSIxMiIgZmlsbD0iIzE2YTM0YSI+TUlORDwvdGV4dD48L3N2Zz4=";
 const PLACEHOLDER_SCRIPT = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIiBmaWxsPSJub25lIiBzdHJva2U9ImN1cnJlbnRDb2xvciI+PHJlY3QgeD0iMjAiIHk9IjIwIiB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHJ4PSI1IiBmaWxsPSIjZmVmY2U4IiBzdHJva2U9IiNjYThhMDQiIHN0cm9rZS13aWR0aD0iMiIvPjxwYXRoIGQ9Ik0zNSA1MGwxMCAxMCAyMC0yMCIgc3Ryb2tlPSIjMTZhMzRhIiBzdHJva2Utd2lkdGg9IjUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPjx0ZXh0IHg9IjUwIiB5PSI5MCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1zaXplPSIxMiIgZmlsbD0iIzE2YTM0YSI+SlM8L3RleHQ+PC9zdmc+";
 
+// Helper to fix texture channel issue (uvundefined error in shader)
+const fixTexture = (tex: THREE.Texture | THREE.Texture[] | null | undefined) => {
+    if (!tex) return tex;
+    if (Array.isArray(tex)) {
+        tex.forEach(t => {
+            if ((t as any).channel === undefined) (t as any).channel = 0;
+        });
+    } else {
+        if ((tex as any).channel === undefined) (tex as any).channel = 0;
+    }
+    return tex;
+};
+
 const stripParameters = (str: string) => {
   if (!str) return '';
   if (str.indexOf('?') > -1) return str.split('?')[0];
@@ -60,6 +73,7 @@ const getVideoId = (videoStr: string) => {
 
 const TargetPlane = ({ target, onDeselect }: { target: Target, onDeselect: () => void }) => {
   const texture = useTexture(target.imageUrl);
+  fixTexture(texture);
   const image = texture.image as { naturalWidth: number; naturalHeight: number; };
   const aspect = image ? image.naturalWidth / image.naturalHeight : 1.6;
   const width = 10;
@@ -76,6 +90,7 @@ const TargetPlane = ({ target, onDeselect }: { target: Target, onDeselect: () =>
 const ImageContent = ({ content }: { content: Content }) => {
     if (!content.imageUrl) return null;
     const texture = useTexture(content.imageUrl);
+    fixTexture(texture);
     const image = texture.image as { naturalWidth: number; naturalHeight: number; };
     const aspect = image ? image.naturalWidth / image.naturalHeight : 1;
     return (
@@ -151,6 +166,7 @@ const ModelContent = ({ content, onLoad, onUpdateMaterialNames }: {
                 const tex = loader.load(url);
                 tex.flipY = false;
                 tex.colorSpace = THREE.SRGBColorSpace;
+                fixTexture(tex);
                 textureCache[url] = tex;
             }
             return textureCache[url];
@@ -238,6 +254,7 @@ const ModelContent = ({ content, onLoad, onUpdateMaterialNames }: {
 
 const ThumbnailMaterial = ({ url }: { url: string }) => {
     const texture = useTexture(url);
+    fixTexture(texture);
     return <meshBasicMaterial map={texture} side={THREE.DoubleSide} toneMapped={false} />;
 };
 
@@ -486,6 +503,7 @@ const VideoFileContent = ({ content, onLoad, isRunning }: { content: Content, on
         tex.minFilter = THREE.LinearFilter;
         tex.magFilter = THREE.LinearFilter;
         tex.format = THREE.RGBAFormat;
+        fixTexture(tex);
         return tex;
     }, [video]);
 

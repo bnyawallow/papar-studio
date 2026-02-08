@@ -801,7 +801,13 @@ const ScenePanel: React.FC<ScenePanelProps> = ({
 
   const handleDrop = async (e: React.DragEvent) => {
     e.preventDefault(); e.stopPropagation(); setIsDraggingOver(false);
-    if (!target || isPreviewMode) return;
+    
+    // Enforce: Can only add content if a target is selected
+    if (!target || isPreviewMode) {
+        alert("Please add and select a Target first.");
+        return;
+    }
+
     const internalAssetData = e.dataTransfer.getData('application/json');
     if (internalAssetData) {
         try {
@@ -840,26 +846,13 @@ const ScenePanel: React.FC<ScenePanelProps> = ({
     else if (file.type.startsWith('video/')) type = ContentType.VIDEO;
     else if (file.type.startsWith('audio/')) type = ContentType.AUDIO;
     else if (file.name.endsWith('.glb') || file.name.endsWith('.gltf')) type = ContentType.MODEL;
-    else if (file.name.endsWith('.mind')) {
-        if (onAddAsset) {
-            try {
-                const url = await fileToBase64(file);
-                onAddAsset({ id: `asset_${Date.now()}`, name: file.name, type: 'mind', url: url, thumbnail: PLACEHOLDER_MIND });
-            } catch(e) { console.error(e); }
-        }
-        return;
-    } else if (file.name.endsWith('.js')) {
-        if (onAddAsset) {
-            try {
-                const url = await fileToBase64(file);
-                onAddAsset({ id: `asset_${Date.now()}`, name: file.name, type: 'script', url: url, thumbnail: PLACEHOLDER_SCRIPT });
-            } catch(e) { console.error(e); }
-        }
-        return;
-    }
+    // Note: We deliberately exclude .mind files here as they should be targets, not content. 
+    // Targets are added via the sidebar.
+
     if (type) {
         try {
             const base64Url = await fileToBase64(file);
+            // Auto-add to assets library
             if (onAddAsset) {
                 onAddAsset({
                     id: `asset_${Date.now()}`,
@@ -872,6 +865,8 @@ const ScenePanel: React.FC<ScenePanelProps> = ({
             let defaultScale: [number, number, number] = [1, 1, 1];
             if (type === ContentType.VIDEO) defaultScale = [5, 5, 5];
             if (type === ContentType.IMAGE) defaultScale = [4, 4, 4];
+            
+            // Create Content attached to the current Target
             const newContent: Content = {
                 id: `content_${Date.now()}`,
                 name: file.name.split('.').slice(0, -1).join('.') || `New ${type}`,
@@ -887,7 +882,7 @@ const ScenePanel: React.FC<ScenePanelProps> = ({
             else if (type === ContentType.MODEL) newContent.modelUrl = base64Url;
             onContentAdd(newContent);
         } catch (error) { alert("Failed to load file."); }
-    } else alert('Unsupported file type.');
+    } else alert('Unsupported file type for content.');
   };
 
   const handleDragStart = (e: React.DragEvent, asset: Asset) => {
@@ -921,7 +916,7 @@ const ScenePanel: React.FC<ScenePanelProps> = ({
     >
       {isDraggingOver && target && !isPreviewMode && (
         <div className="absolute inset-0 bg-blue-500 bg-opacity-50 flex items-center justify-center z-30 pointer-events-none">
-            <p className="text-white text-2xl font-bold">Drop File Here</p>
+            <p className="text-white text-2xl font-bold">Drop File Here to Add Content</p>
         </div>
       )}
       {!isPreviewMode && (

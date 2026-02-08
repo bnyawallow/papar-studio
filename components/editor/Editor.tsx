@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';
@@ -72,6 +71,9 @@ const Editor: React.FC<EditorProps> = ({ project: initialProject, onGoToDashboar
   const assets = project.assets || [];
 
   const [isAssetsModalOpen, setIsAssetsModalOpen] = useState(false);
+  // Context state to know if we are adding a Target (top level) or Content (child)
+  const [assetSelectionMode, setAssetSelectionMode] = useState<'target' | 'content'>('content');
+
   const [isPublishModalOpen, setIsPublishModalOpen] = useState(false);
   const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
@@ -182,8 +184,6 @@ const Editor: React.FC<EditorProps> = ({ project: initialProject, onGoToDashboar
     setProject(prev => {
         const targetId = selectedTargetId || prev.targets[0]?.id;
         if (!targetId) {
-            // Cannot rely on showToast here easily as it's a side effect in render phase or setter.
-            // Assuming target exists or handling elsewhere.
             return prev;
         }
 
@@ -206,7 +206,7 @@ const Editor: React.FC<EditorProps> = ({ project: initialProject, onGoToDashboar
   const handleRequestContent = (type: ContentType) => {
     const target = project.targets.find(t => t.id === selectedTargetId) || project.targets[0];
     if (!target) {
-        showToast("Please select a target first.", 'error');
+        showToast("Please add and select an Image Target first.", 'error');
         return;
     }
 
@@ -252,6 +252,7 @@ const Editor: React.FC<EditorProps> = ({ project: initialProject, onGoToDashboar
     }
 
     if (type === ContentType.IMAGE || type === ContentType.VIDEO || type === ContentType.MODEL || type === ContentType.AUDIO) {
+        setAssetSelectionMode('content'); // Ensure we are in content mode
         setIsAssetsModalOpen(true);
         requestedContentTypeRef.current = type;
         const input = fileInputRef.current;
@@ -262,7 +263,8 @@ const Editor: React.FC<EditorProps> = ({ project: initialProject, onGoToDashboar
         else if (type === ContentType.AUDIO) input.accept = "audio/*";
         else if (type === ContentType.MODEL) input.accept = ".glb,.gltf";
         
-        input.click();
+        // Note: We open the modal first, but if user cancels modal and uses file picker, this ref handles the direct upload logic.
+        // The modal is preferred.
     }
   }
 
@@ -329,6 +331,8 @@ const Editor: React.FC<EditorProps> = ({ project: initialProject, onGoToDashboar
             }
 
             if (!targetId) {
+                // If no target, we just add the asset, but can't add content.
+                // But handleRequestContent should have caught this.
                 return {
                     ...prev,
                     assets: [newAsset, ...currentAssets]
@@ -356,6 +360,7 @@ const Editor: React.FC<EditorProps> = ({ project: initialProject, onGoToDashboar
         setSelectedContentId(contentId); 
 
         showToast(`${type === ContentType.VIDEO ? 'Video Clip' : type} added successfully!`, 'success');
+        setIsAssetsModalOpen(false); // Close modal if it was open behind this
     } catch (error) {
         console.error("Error processing file:", error);
         showToast("Failed to load file.", 'error');
@@ -364,68 +369,103 @@ const Editor: React.FC<EditorProps> = ({ project: initialProject, onGoToDashboar
   }
 
   const handleAddTargetClick = useCallback(() => {
+    setAssetSelectionMode('target');
     setIsAssetsModalOpen(true);
   }, []);
 
-  const handleCreateTargetFromAsset = useCallback((asset: Asset) => {
-    const newTargetId = `target_${Date.now()}`;
-
-    setProject(prev => {
-        const targetId = selectedTargetId || prev.targets[0]?.id;
-
-        if (asset.type === 'video') {
-            const target = targetId ? prev.targets.find(t => t.id === targetId) : undefined;
-            const existingNames = target ? target.contents.map(c => c.name) : [];
-            const name = getUniqueName(asset.name, existingNames);
-            const newContent: Content = {
-                id: `content_v_${Date.now()}`,
-                name: name,
-                type: ContentType.VIDEO,
-                transform: { position: [0, 0.5, 0], rotation: [0, 0, 0], scale: [5, 5, 1] },
-                videoUrl: asset.url,
-                autoplay: false,
-                loop: false,
-                visible: true,
-                videoClickToggle: true,
-            };
-            
-            if (!target) return prev; 
-
-            return {
-                ...prev,
-                targets: prev.targets.map(t => t.id === targetId ? {...t, contents: [...t.contents, newContent]} : t)
-            };
+  const handleAssetSelected = useCallback((asset: Asset) => {
+    // 1. If mode is TARGET, create a new Target
+    if (assetSelectionMode === 'target') {
+        if (asset.type !== 'image' && asset.type !== 'mind') {
+             showToast("Only Images or .mind files can be used as Targets.", 'error');
+             return;
         }
 
-        // Image/Mind Target creation
-        const imageUrl = (asset.type === 'mind' && asset.thumbnail) ? asset.thumbnail : asset.url;
-        const existingTargetNames = prev.targets.map(t => t.name);
-        const targetName = getUniqueName(asset.name.replace(/\.[^/.]+$/, ""), existingTargetNames);
-
-        const newTarget: Target = {
-            id: newTargetId,
-            name: targetName,
-            imageUrl: imageUrl, 
-            mindFileUrl: asset.type === 'mind' ? asset.url : undefined, 
-            contents: [],
-            visible: true,
-        };
-
-        return {
-            ...prev,
-            targets: [...prev.targets, newTarget],
-        };
-    });
+        const newTargetId = `target_${Date.now()}`;
+        setProject(prev => {
+            const imageUrl = (asset.type === 'mind' && asset.thumbnail) ? asset.thumbnail : asset.url;
+            const existingTargetNames = prev.targets.map(t => t.name);
+            const targetName = getUniqueName(asset.name.replace(/\.[^/.]+$/, ""), existingTargetNames);
     
-    if (asset.type !== 'video') {
+            const newTarget: Target = {
+                id: newTargetId,
+                name: targetName,
+                imageUrl: imageUrl, 
+                mindFileUrl: asset.type === 'mind' ? asset.url : undefined, 
+                contents: [],
+                visible: true,
+            };
+    
+            return {
+                ...prev,
+                targets: [...prev.targets, newTarget],
+            };
+        });
+        
         setSelectedTargetId(newTargetId);
         setSelectedContentId(null);
-        showToast("Target created from asset.", 'success');
-    } else {
-        showToast("Video Clip added to scene.", 'success');
+        showToast("New Target created.", 'success');
+        setIsAssetsModalOpen(false);
+        return;
     }
-    setIsAssetsModalOpen(false);
-  }, [selectedTargetId, setProject, showToast]);
+
+    // 2. If mode is CONTENT, add as child to selected Target
+    if (assetSelectionMode === 'content') {
+        setProject(prev => {
+            const targetId = selectedTargetId || prev.targets[0]?.id;
+            const target = targetId ? prev.targets.find(t => t.id === targetId) : undefined;
+            
+            if (!target) {
+                // Should be handled by UI checks, but safety net
+                return prev;
+            }
+
+            const existingNames = target.contents.map(c => c.name);
+            const name = getUniqueName(asset.name, existingNames);
+            const newContentId = `content_${Date.now()}`;
+
+            let newContent: Content = {
+                id: newContentId,
+                name: name,
+                type: ContentType.IMAGE, // Default fallback
+                transform: { position: [0, 0.5, 0], rotation: [0, 0, 0], scale: [1, 1, 1] },
+                visible: true,
+                autoplay: false,
+                loop: false,
+            };
+
+            if (asset.type === 'image') {
+                newContent.type = ContentType.IMAGE;
+                newContent.imageUrl = asset.url;
+                newContent.transform.scale = [4, 4, 4];
+            } else if (asset.type === 'video') {
+                newContent.type = ContentType.VIDEO;
+                newContent.videoUrl = asset.url;
+                newContent.transform.scale = [5, 5, 1];
+                newContent.videoClickToggle = true;
+            } else if (asset.type === 'audio') {
+                newContent.type = ContentType.AUDIO;
+                newContent.audioUrl = asset.url;
+            } else if (asset.type === 'model') {
+                newContent.type = ContentType.MODEL;
+                newContent.modelUrl = asset.url;
+            }
+
+            const updatedTargets = prev.targets.map(t => {
+                if (t.id === targetId) {
+                    return { ...t, contents: [...t.contents, newContent] };
+                }
+                return t;
+            });
+
+            return { ...prev, targets: updatedTargets };
+        });
+        
+        showToast("Asset added to scene.", 'success');
+        setIsAssetsModalOpen(false);
+    }
+
+  }, [selectedTargetId, assetSelectionMode, setProject, showToast]);
 
   const handleDeleteTarget = useCallback((targetId: string) => {
     setProject(prev => {
@@ -647,7 +687,7 @@ const Editor: React.FC<EditorProps> = ({ project: initialProject, onGoToDashboar
       <AssetsModal
         isOpen={isAssetsModalOpen}
         onClose={() => setIsAssetsModalOpen(false)}
-        onAddTarget={handleCreateTargetFromAsset}
+        onAddTarget={handleAssetSelected}
         assets={assets}
         onAddAsset={handleAddAsset}
       />

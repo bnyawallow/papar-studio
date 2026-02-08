@@ -6,7 +6,8 @@ import Dashboard from '../components/dashboard/Dashboard';
 import Editor from '../components/editor/Editor';
 import { Project } from '../types';
 import { MOCK_TEMPLATES } from '../data/mockData';
-import { loadProjects, saveProjects, checkCloudConnection } from '../utils/storage';
+import { loadProjects, saveProjects, checkCloudConnection, deleteProjectFromStorage } from '../utils/storage';
+import Toast, { ToastType } from '../components/ui/Toast';
 
 export type View = 'dashboard' | 'editor';
 
@@ -17,6 +18,20 @@ const Page: React.FC = () => {
   const [activeProject, setActiveProject] = useState<Project | null>(null);
   const [isMounted, setIsMounted] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
+
+  const [toast, setToast] = useState<{ message: string; type: ToastType; isVisible: boolean }>({
+    message: '',
+    type: 'info',
+    isVisible: false,
+  });
+
+  const showToast = useCallback((message: string, type: ToastType = 'info') => {
+    setToast({ message, type, isVisible: true });
+  }, []);
+
+  const closeToast = useCallback(() => {
+    setToast(prev => ({ ...prev, isVisible: false }));
+  }, []);
 
   useEffect(() => {
     setIsMounted(true);
@@ -54,11 +69,22 @@ const Page: React.FC = () => {
     }
   }, [projects]);
 
-  const handleDeleteProject = useCallback((projectId: string) => {
+  const handleDeleteProject = useCallback(async (projectId: string) => {
+    const previousProjects = projects;
+    // Optimistic update
     const updatedProjects = projects.filter(p => p.id !== projectId);
     setProjects(updatedProjects);
-    // Optimistic update
-    saveProjects(updatedProjects);
+
+    // Persist deletion
+    const success = await deleteProjectFromStorage(projectId);
+    
+    if (success) {
+        showToast("Project deleted successfully.", 'success');
+    } else {
+        // Rollback
+        setProjects(previousProjects);
+        showToast("Failed to delete project.", 'error');
+    }
   }, [projects]);
 
   const handleGoToDashboard = useCallback(() => {
@@ -124,15 +150,23 @@ const Page: React.FC = () => {
   }
 
   return (
-    <Dashboard
-      projects={projects}
-      templates={MOCK_TEMPLATES}
-      onCreateProject={handleCreateProject}
-      onOpenProject={handleOpenProject}
-      onDeleteProject={handleDeleteProject}
-      isConnected={isConnected}
-      isLoading={areProjectsLoading}
-    />
+    <>
+      <Dashboard
+        projects={projects}
+        templates={MOCK_TEMPLATES}
+        onCreateProject={handleCreateProject}
+        onOpenProject={handleOpenProject}
+        onDeleteProject={handleDeleteProject}
+        isConnected={isConnected}
+        isLoading={areProjectsLoading}
+      />
+      <Toast 
+        message={toast.message} 
+        type={toast.type} 
+        isVisible={toast.isVisible} 
+        onClose={closeToast} 
+      />
+    </>
   );
 };
 

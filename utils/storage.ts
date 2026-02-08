@@ -1,5 +1,4 @@
 
-
 import { Project } from '../types';
 // FIX: Use relative path instead of alias '@/'
 import { supabase } from '../lib/supabase';
@@ -99,13 +98,15 @@ export const saveProjects = async (projects: Project[]): Promise<boolean> => {
   }
 };
 
-export const deleteProjectFromStorage = async (projectId: string) => {
-    if (!supabase) return;
+export const deleteProjectFromStorage = async (projectId: string): Promise<boolean> => {
+    if (!supabase) return true; // Local mode always succeeds
     try {
         const { error } = await supabase.from('projects').delete().eq('id', projectId);
         if(error) throw error;
+        return true;
     } catch(e) {
         console.error("Failed to delete project", e);
+        return false;
     }
 }
 

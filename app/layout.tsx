@@ -17,7 +17,6 @@ export default function RootLayout({
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <script src="/vendor/mindar-image-compiler.js" defer></script>
         <script src="https://cdn.tailwindcss.com"></script>
         <script
           type="importmap"

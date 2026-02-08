@@ -9,9 +9,58 @@ interface ProjectListProps {
   projects: Project[];
   onOpenProject: (projectId: string) => void;
   onDeleteProject: (projectId: string) => void;
+  isLoading?: boolean;
 }
 
-const ProjectList: React.FC<ProjectListProps> = ({ projects, onOpenProject, onDeleteProject }) => {
+const ProjectList: React.FC<ProjectListProps> = ({ projects, onOpenProject, onDeleteProject, isLoading = false }) => {
+  if (isLoading) {
+      return (
+        <div className="animate-pulse">
+            {/* Table for medium and larger screens */}
+            <div className="overflow-x-auto hidden md:block">
+                <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-800 text-white">
+                        <tr>
+                            <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Name</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Last Updated</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Status</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">#Views</th>
+                            <th className="relative px-6 py-3"><span className="sr-only">Actions</span></th>
+                        </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                        {[1, 2, 3].map((i) => (
+                            <tr key={i}>
+                                <td className="px-6 py-4 whitespace-nowrap"><div className="h-4 bg-gray-200 rounded w-48"></div></td>
+                                <td className="px-6 py-4 whitespace-nowrap"><div className="h-4 bg-gray-200 rounded w-32"></div></td>
+                                <td className="px-6 py-4 whitespace-nowrap"><div className="h-6 bg-gray-200 rounded-full w-16"></div></td>
+                                <td className="px-6 py-4 whitespace-nowrap"><div className="h-4 bg-gray-200 rounded w-8"></div></td>
+                                <td className="px-6 py-4 whitespace-nowrap text-right"><div className="h-5 w-5 bg-gray-200 rounded-full ml-auto"></div></td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+            
+            {/* Cards for small screens */}
+            <div className="md:hidden space-y-4">
+                {[1, 2, 3].map((i) => (
+                    <div key={i} className="bg-gray-50 p-4 rounded-lg shadow space-y-3">
+                        <div className="flex justify-between items-start">
+                            <div className="h-5 bg-gray-200 rounded w-2/3"></div>
+                            <div className="h-5 w-5 bg-gray-200 rounded"></div>
+                        </div>
+                        <div className="space-y-2">
+                            <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+                            <div className="h-4 bg-gray-200 rounded w-1/3"></div>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
+      );
+  }
+
   return (
     <div>
       {/* Table for medium and larger screens */}

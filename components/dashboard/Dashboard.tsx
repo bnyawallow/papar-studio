@@ -14,6 +14,7 @@ interface DashboardProps {
   onOpenProject: (projectId: string) => void;
   onDeleteProject: (projectId: string) => void;
   isConnected: boolean;
+  isLoading?: boolean;
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ 
@@ -22,7 +23,8 @@ const Dashboard: React.FC<DashboardProps> = ({
     onCreateProject, 
     onOpenProject, 
     onDeleteProject,
-    isConnected 
+    isConnected,
+    isLoading = false
 }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [projectToDelete, setProjectToDelete] = useState<string | null>(null);
@@ -88,6 +90,7 @@ const Dashboard: React.FC<DashboardProps> = ({
             projects={projects} 
             onOpenProject={onOpenProject} 
             onDeleteProject={handleDeleteClick}
+            isLoading={isLoading}
           />
         </div>
       </main>

@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import React, { useState, useCallback, useEffect } from 'react';
@@ -14,6 +13,7 @@ export type View = 'dashboard' | 'editor';
 const Page: React.FC = () => {
   const [view, setView] = useState<View>('dashboard');
   const [projects, setProjects] = useState<Project[]>([]);
+  const [areProjectsLoading, setAreProjectsLoading] = useState(true);
   const [activeProject, setActiveProject] = useState<Project | null>(null);
   const [isMounted, setIsMounted] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
@@ -24,8 +24,10 @@ const Page: React.FC = () => {
     // Check connection
     checkCloudConnection().then(status => setIsConnected(status));
 
+    setAreProjectsLoading(true);
     loadProjects().then(loaded => {
         setProjects(loaded);
+        setAreProjectsLoading(false);
     });
   }, []);
 
@@ -63,7 +65,11 @@ const Page: React.FC = () => {
     setActiveProject(null);
     setView('dashboard');
     // Reload projects to ensure sync state
-    loadProjects().then(setProjects);
+    setAreProjectsLoading(true);
+    loadProjects().then(loaded => {
+        setProjects(loaded);
+        setAreProjectsLoading(false);
+    });
   }, []);
   
   const handleUpdateProject = useCallback((updatedProject: Project) => {
@@ -125,6 +131,7 @@ const Page: React.FC = () => {
       onOpenProject={handleOpenProject}
       onDeleteProject={handleDeleteProject}
       isConnected={isConnected}
+      isLoading={areProjectsLoading}
     />
   );
 };

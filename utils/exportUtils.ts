@@ -298,22 +298,26 @@ export const generateAFrameHtml = (project: Project, localAssetMap?: Map<string,
 };
 
 // New function to generate ZIP
-export const generateProjectZip = async (project: Project, mindFileUrl: string): Promise<Blob> => {
+export const generateProjectZip = async (project: Project, mindFileUrl: string, signal?: AbortSignal): Promise<Blob> => {
+    if (signal?.aborted) throw new Error("Aborted");
+
     const zip = new JSZip();
     const assetsFolder = zip.folder("assets");
     const localPathMap = new Map<string, string>(); // ContentID -> "assets/filename.ext"
 
     // 1. Fetch and add targets.mind
     try {
-        const mindRes = await fetch(mindFileUrl);
+        const mindRes = await fetch(mindFileUrl, { signal });
         const mindBlob = await mindRes.blob();
         zip.file("targets.mind", mindBlob);
     } catch (e) {
+        if (signal?.aborted) throw new Error("Aborted");
         throw new Error("Failed to fetch compiled mind file.");
     }
 
     // 2. Fetch and add all content assets
     const fetchAndAddAsset = async (url: string, id: string, defaultExt: string) => {
+        if (signal?.aborted) return;
         try {
             // Determine extension (naive)
             let ext = defaultExt;
@@ -332,12 +336,13 @@ export const generateProjectZip = async (project: Project, mindFileUrl: string):
             }
 
             const filename = `${id}.${ext}`;
-            const res = await fetch(url);
+            const res = await fetch(url, { signal });
             const blob = await res.blob();
             
             assetsFolder?.file(filename, blob);
             localPathMap.set(id, `assets/${filename}`);
         } catch (e) {
+            if (signal?.aborted) throw e;
             console.error(`Failed to download asset for content ${id}:`, e);
         }
     };
@@ -359,6 +364,7 @@ export const generateProjectZip = async (project: Project, mindFileUrl: string):
     }
 
     await Promise.all(assetPromises);
+    if (signal?.aborted) throw new Error("Aborted");
 
     // 3. Generate HTML with local paths
     const htmlContent = generateAFrameHtml(project, localPathMap, './targets.mind');

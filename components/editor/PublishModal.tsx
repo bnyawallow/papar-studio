@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import QRCode from 'qrcode';
 import { XMarkIcon, FileIcon } from '../icons/Icons';
 import { Project } from '../../types';
@@ -23,7 +23,10 @@ const PublishModal: React.FC<PublishModalProps> = ({ isOpen, onClose, project })
   const [isPublishing, setIsPublishing] = useState(false);
   const [isZipping, setIsZipping] = useState(false);
 
-  // Reset state when opened
+  // AbortController to cancel operations
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  // Reset state when opened and setup abort controller
   useEffect(() => {
       if (isOpen) {
           setIsCompiling(false);
@@ -34,36 +37,58 @@ const PublishModal: React.FC<PublishModalProps> = ({ isOpen, onClose, project })
           setProgress(0);
           setCompiledMindFile(null);
           setProjectJson('');
+          
+          abortControllerRef.current = new AbortController();
+      } else {
+          // If closed, abort any pending operations
+          abortControllerRef.current?.abort();
       }
+
+      return () => {
+          // Cleanup on unmount (if isOpen was true)
+          abortControllerRef.current?.abort();
+      };
   }, [isOpen]);
 
   const handleCompile = async () => {
       setIsCompiling(true);
       setProgress(0);
       try {
+          const signal = abortControllerRef.current?.signal;
+
           // Convert all target images to Files
           const files: File[] = [];
           for (const target of project.targets) {
-              const res = await fetch(target.imageUrl);
+              if (signal?.aborted) throw new Error("Aborted");
+              const res = await fetch(target.imageUrl, { signal });
               const blob = await res.blob();
               files.push(new File([blob], `${target.name}.jpg`, { type: blob.type }));
           }
 
           if (files.length > 0) {
-              const mindFileUrl = await compileFiles(files, (p) => setProgress(Math.round(p)));
+              const mindFileUrl = await compileFiles(files, (p) => {
+                  if (!signal?.aborted) setProgress(Math.round(p));
+              }, signal);
+              
+              if (signal?.aborted) return;
               setCompiledMindFile(mindFileUrl);
               const json = generateProjectJson(project, mindFileUrl);
               setProjectJson(JSON.stringify(json, null, 2));
           } else {
               // No targets, just export structure
+              if (signal?.aborted) return;
               const json = generateProjectJson(project, null);
               setProjectJson(JSON.stringify(json, null, 2));
           }
-      } catch (e) {
-          console.error("Compilation failed", e);
-          alert("Failed to compile targets.");
+      } catch (e: any) {
+          if (e.message !== "Aborted" && e.name !== "AbortError") {
+            console.error("Compilation failed", e);
+            alert("Failed to compile targets.");
+          }
       } finally {
-          setIsCompiling(false);
+          if (!abortControllerRef.current?.signal.aborted) {
+            setIsCompiling(false);
+          }
       }
   };
 
@@ -75,16 +100,15 @@ const PublishModal: React.FC<PublishModalProps> = ({ isOpen, onClose, project })
 
       setIsPublishing(true);
       try {
+          const signal = abortControllerRef.current?.signal;
+          if (signal?.aborted) throw new Error("Aborted");
+
           // 1. Prepare Project Data
           // We need to persist the compiled mind file URL.
-          // If it's a blob URL, we should ideally convert to Data URI or upload it.
-          // For this demo environment, let's convert to Data URI to ensure it persists in JSON storage
-          // even if the blob URL session expires (though blob URLs don't work cross-tab anyway).
-          
           let persistentMindUrl = compiledMindFile;
 
           if (compiledMindFile.startsWith('blob:')) {
-              const res = await fetch(compiledMindFile);
+              const res = await fetch(compiledMindFile, { signal });
               const blob = await res.blob();
               persistentMindUrl = await new Promise((resolve) => {
                   const reader = new FileReader();
@@ -92,6 +116,8 @@ const PublishModal: React.FC<PublishModalProps> = ({ isOpen, onClose, project })
                   reader.readAsDataURL(blob);
               });
           }
+          
+          if (signal?.aborted) throw new Error("Aborted");
 
           // Update all targets with the same mind file URL (MindAR uses one file for multiple targets usually)
           const updatedTargets = project.targets.map(t => ({
@@ -108,6 +134,8 @@ const PublishModal: React.FC<PublishModalProps> = ({ isOpen, onClose, project })
           // 2. Save to DB
           await saveProjects([updatedProject]); 
 
+          if (signal?.aborted) throw new Error("Aborted");
+
           // 3. Generate Link
           const origin = window.location.origin;
           // Use the API route which returns the A-Frame HTML
@@ -116,13 +144,19 @@ const PublishModal: React.FC<PublishModalProps> = ({ isOpen, onClose, project })
 
           // 4. Generate QR Code
           const qrData = await QRCode.toDataURL(url);
-          setQrCodeUrl(qrData);
+          if (!signal?.aborted) {
+             setQrCodeUrl(qrData);
+          }
 
-      } catch(e) {
-          console.error(e);
-          alert("Failed to publish.");
+      } catch(e: any) {
+          if (e.message !== "Aborted" && e.name !== "AbortError") {
+            console.error(e);
+            alert("Failed to publish.");
+          }
       } finally {
-          setIsPublishing(false);
+          if (!abortControllerRef.current?.signal.aborted) {
+             setIsPublishing(false);
+          }
       }
   };
 
@@ -154,7 +188,11 @@ const PublishModal: React.FC<PublishModalProps> = ({ isOpen, onClose, project })
       
       setIsZipping(true);
       try {
-          const blob = await generateProjectZip(project, compiledMindFile);
+          const signal = abortControllerRef.current?.signal;
+          const blob = await generateProjectZip(project, compiledMindFile, signal);
+          
+          if (signal?.aborted) return;
+
           const url = URL.createObjectURL(blob);
           const a = document.createElement('a');
           a.href = url;
@@ -163,11 +201,15 @@ const PublishModal: React.FC<PublishModalProps> = ({ isOpen, onClose, project })
           a.click();
           document.body.removeChild(a);
           URL.revokeObjectURL(url);
-      } catch (e) {
-          console.error("Zip generation failed", e);
-          alert("Failed to generate ZIP file.");
+      } catch (e: any) {
+          if (e.message !== "Aborted" && e.name !== "AbortError") {
+            console.error("Zip generation failed", e);
+            alert("Failed to generate ZIP file.");
+          }
       } finally {
-          setIsZipping(false);
+          if (!abortControllerRef.current?.signal.aborted) {
+            setIsZipping(false);
+          }
       }
   }
 

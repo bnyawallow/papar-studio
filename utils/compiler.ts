@@ -90,7 +90,9 @@ const loadImage = (file: File): Promise<HTMLImageElement> => {
     });
 };
 
-export const compileFiles = async (files: File[], onProgress?: (progress: number) => void): Promise<string> => {
+export const compileFiles = async (files: File[], onProgress?: (progress: number) => void, signal?: AbortSignal): Promise<string> => {
+    if (signal?.aborted) throw new Error("Aborted");
+
     const Compiler = await loadCompiler();
     
     if (!Compiler) {
@@ -99,17 +101,26 @@ export const compileFiles = async (files: File[], onProgress?: (progress: number
   
     const compiler = new Compiler();
     
+    if (signal?.aborted) throw new Error("Aborted");
+
     // Load files as images first because MindAR compiler uses drawImage which requires Image, Canvas, or Video elements
     const images = await Promise.all(files.map(loadImage));
+
+    if (signal?.aborted) throw new Error("Aborted");
 
     if (onProgress) onProgress(0);
   
     return new Promise(async (resolve, reject) => {
+        if (signal?.aborted) return reject(new Error("Aborted"));
+
         try {
             await compiler.compileImageTargets(images, (progress: number) => {
+                if (signal?.aborted) return;
                 if (onProgress) onProgress(progress);
             });
             
+            if (signal?.aborted) return reject(new Error("Aborted"));
+
             const exportedBuffer = await compiler.exportData();
             const blob = new Blob([exportedBuffer]);
             

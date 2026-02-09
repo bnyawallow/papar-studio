@@ -62,6 +62,8 @@ const Header: React.FC<HeaderProps> = ({
         <span className="text-gray-300">/</span>
         {isEditingName ? (
           <input
+            id="header-project-name"
+            name="project-name"
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}

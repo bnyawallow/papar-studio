@@ -37,8 +37,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, config, 
         
         <div className="space-y-4">
             <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Max Tracked Targets</label>
+                <label htmlFor="setting-max-track" className="block text-sm font-medium text-gray-700 mb-1">Max Tracked Targets</label>
                 <input 
+                    id="setting-max-track"
+                    name="setting-max-track"
                     type="number" 
                     min="1" 
                     max="5" 
@@ -50,8 +52,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, config, 
             </div>
 
             <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Warmup Tolerance</label>
+                <label htmlFor="setting-warmup" className="block text-sm font-medium text-gray-700 mb-1">Warmup Tolerance</label>
                 <input 
+                    id="setting-warmup"
+                    name="setting-warmup"
                     type="number" 
                     min="0" 
                     value={localConfig.warmupTolerance} 
@@ -62,8 +66,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, config, 
             </div>
 
             <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Miss Tolerance</label>
+                <label htmlFor="setting-miss" className="block text-sm font-medium text-gray-700 mb-1">Miss Tolerance</label>
                 <input 
+                    id="setting-miss"
+                    name="setting-miss"
                     type="number" 
                     min="0" 
                     value={localConfig.missTolerance} 
@@ -75,8 +81,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, config, 
 
             <div className="grid grid-cols-2 gap-4">
                 <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Filter MinCF</label>
+                    <label htmlFor="setting-filter-mincf" className="block text-sm font-medium text-gray-700 mb-1">Filter MinCF</label>
                     <input 
+                        id="setting-filter-mincf"
+                        name="setting-filter-mincf"
                         type="number" 
                         step="0.0001"
                         value={localConfig.filterMinCF} 
@@ -85,8 +93,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, config, 
                     />
                 </div>
                 <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Filter Beta</label>
+                    <label htmlFor="setting-filter-beta" className="block text-sm font-medium text-gray-700 mb-1">Filter Beta</label>
                     <input 
+                        id="setting-filter-beta"
+                        name="setting-filter-beta"
                         type="number" 
                         step="0.0001"
                         value={localConfig.filterBeta} 

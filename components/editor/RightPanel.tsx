@@ -33,8 +33,9 @@ const safeColor = (color?: string, fallback = '#000000') => {
 };
 
 // Enhanced Color Picker Component
-const ColorInput = ({ label, value, onChange, fallback = '#000000' }: { label: string, value?: string, onChange: (val: string) => void, fallback?: string }) => {
+const ColorInput = ({ label, value, onChange, fallback = '#000000', id }: { label: string, value?: string, onChange: (val: string) => void, fallback?: string, id?: string }) => {
     const currentColor = safeColor(value, fallback);
+    const inputId = id || `color-input-${label.replace(/\s+/g, '-').toLowerCase()}`;
     
     const handleHexChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         let val = e.target.value.replace(/[^0-9A-F]/ig, '').toUpperCase();
@@ -44,10 +45,11 @@ const ColorInput = ({ label, value, onChange, fallback = '#000000' }: { label: s
 
     return (
         <div>
-            <label className="text-xs text-gray-500 font-bold block mb-1 uppercase tracking-wider">{label}</label>
+            <label htmlFor={inputId} className="text-xs text-gray-500 font-bold block mb-1 uppercase tracking-wider">{label}</label>
             <div className="flex gap-2 items-center">
                 <div className="relative w-8 h-8 rounded border border-gray-300 overflow-hidden shrink-0 shadow-sm">
                     <input 
+                        id={`${inputId}-picker`}
                         type="color" 
                         value={currentColor} 
                         onChange={(e) => onChange(e.target.value)} 
@@ -57,6 +59,7 @@ const ColorInput = ({ label, value, onChange, fallback = '#000000' }: { label: s
                 <div className="flex-1 relative">
                     <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 text-xs font-mono select-none">#</span>
                     <input
+                        id={inputId}
                         type="text"
                         value={currentColor.replace('#', '').toUpperCase()}
                         onChange={handleHexChange}
@@ -273,7 +276,7 @@ const RightPanel: React.FC<RightPanelProps> = ({
                     {['x', 'y', 'z'].map((axis, i) => (
                       <div key={axis} className="flex items-center gap-1 border rounded px-1">
                         <span className="text-[10px] text-gray-400 font-bold">{axis.toUpperCase()}</span>
-                        <input type="number" step="0.01" value={formData.transform.position[i] ?? 0} onChange={(e) => handleTransformChange(axis as any, 'position', e.target.value)} className="w-full text-xs py-1 focus:outline-none bg-transparent" />
+                        <input type="number" step="0.01" name={`transform-position-${axis}`} value={formData.transform.position[i] ?? 0} onChange={(e) => handleTransformChange(axis as any, 'position', e.target.value)} className="w-full text-xs py-1 focus:outline-none bg-transparent" />
                       </div>
                     ))}
                   </div>
@@ -284,7 +287,7 @@ const RightPanel: React.FC<RightPanelProps> = ({
                     {['x', 'y', 'z'].map((axis, i) => (
                       <div key={axis} className="flex items-center gap-1 border rounded px-1">
                         <span className="text-[10px] text-gray-400 font-bold">{axis.toUpperCase()}</span>
-                        <input type="number" step="0.01" value={formData.transform.rotation[i] ?? 0} onChange={(e) => handleTransformChange(axis as any, 'rotation', e.target.value)} className="w-full text-xs py-1 focus:outline-none bg-transparent" />
+                        <input type="number" step="0.01" name={`transform-rotation-${axis}`} value={formData.transform.rotation[i] ?? 0} onChange={(e) => handleTransformChange(axis as any, 'rotation', e.target.value)} className="w-full text-xs py-1 focus:outline-none bg-transparent" />
                       </div>
                     ))}
                   </div>
@@ -295,7 +298,7 @@ const RightPanel: React.FC<RightPanelProps> = ({
                     {['x', 'y', 'z'].map((axis, i) => (
                       <div key={axis} className="flex items-center gap-1 border rounded px-1">
                         <span className="text-[10px] text-gray-400 font-bold">{axis.toUpperCase()}</span>
-                        <input type="number" step="0.01" value={formData.transform.scale[i] ?? 1} onChange={(e) => handleTransformChange(axis as any, 'scale', e.target.value)} className="w-full text-xs py-1 focus:outline-none bg-transparent" />
+                        <input type="number" step="0.01" name={`transform-scale-${axis}`} value={formData.transform.scale[i] ?? 1} onChange={(e) => handleTransformChange(axis as any, 'scale', e.target.value)} className="w-full text-xs py-1 focus:outline-none bg-transparent" />
                       </div>
                     ))}
                   </div>
@@ -338,10 +341,11 @@ const RightPanel: React.FC<RightPanelProps> = ({
                         </div>
 
                         <div>
-                            <label className="text-xs text-gray-400 block mb-1 uppercase font-bold tracking-tighter">
+                            <label htmlFor="video-url-input" className="text-xs text-gray-400 block mb-1 uppercase font-bold tracking-tighter">
                                 {(formData.streamingService === 'vimeo') ? 'Vimeo ID / URL' : 'YouTube ID / URL'}
                             </label>
                             <input 
+                                id="video-url-input"
                                 type="text" 
                                 value={formData.videoUrl || ''} 
                                 onChange={(e) => {
@@ -442,20 +446,20 @@ const RightPanel: React.FC<RightPanelProps> = ({
                {formData.type === ContentType.TEXT && (
                    <div className="space-y-4">
                        <div>
-                           <label className="text-xs text-gray-500 font-bold block mb-1 uppercase tracking-wider">Content</label>
-                           <textarea value={formData.textContent || ''} onChange={(e) => handleGenericChange('textContent', e.target.value)} className="w-full text-sm border border-gray-300 rounded p-2 h-24 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-shadow" />
+                           <label htmlFor="text-content-input" className="text-xs text-gray-500 font-bold block mb-1 uppercase tracking-wider">Content</label>
+                           <textarea id="text-content-input" value={formData.textContent || ''} onChange={(e) => handleGenericChange('textContent', e.target.value)} className="w-full text-sm border border-gray-300 rounded p-2 h-24 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-shadow" />
                        </div>
                        
                        <div className="grid grid-cols-2 gap-3">
                            <div>
-                               <label className="text-xs text-gray-500 font-bold block mb-1 uppercase tracking-wider">Font Family</label>
-                               <select value={formData.font || 'Arial'} onChange={(e) => handleGenericChange('font', e.target.value)} className="w-full text-xs border border-gray-300 rounded p-2 bg-white focus:ring-2 focus:ring-blue-500 outline-none">
+                               <label htmlFor="font-family-select" className="text-xs text-gray-500 font-bold block mb-1 uppercase tracking-wider">Font Family</label>
+                               <select id="font-family-select" value={formData.font || 'Arial'} onChange={(e) => handleGenericChange('font', e.target.value)} className="w-full text-xs border border-gray-300 rounded p-2 bg-white focus:ring-2 focus:ring-blue-500 outline-none">
                                    {Object.keys(FONT_MAP).map(f => <option key={f} value={f}>{f}</option>)}
                                </select>
                            </div>
                            <div>
-                               <label className="text-xs text-gray-500 font-bold block mb-1 uppercase tracking-wider">Size</label>
-                               <input type="number" min="1" value={formData.size || 50} onChange={(e) => handleGenericChange('size', parseInt(e.target.value))} className="w-full text-xs border border-gray-300 rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none" />
+                               <label htmlFor="font-size-input" className="text-xs text-gray-500 font-bold block mb-1 uppercase tracking-wider">Size</label>
+                               <input id="font-size-input" type="number" min="1" value={formData.size || 50} onChange={(e) => handleGenericChange('size', parseInt(e.target.value))} className="w-full text-xs border border-gray-300 rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none" />
                            </div>
                        </div>
 
@@ -507,7 +511,7 @@ const RightPanel: React.FC<RightPanelProps> = ({
                             
                             <div>
                                 <div className="flex justify-between items-center mb-1">
-                                    <label className="text-xs text-gray-500 font-bold uppercase tracking-wider">Outline Color</label>
+                                    <label htmlFor="outline-width-input" className="text-xs text-gray-500 font-bold uppercase tracking-wider">Outline Color</label>
                                     <span className="text-[10px] text-gray-400">Width: {formData.outlineWidth || 0}%</span>
                                 </div>
                                 <div className="flex gap-2 items-end">
@@ -517,10 +521,12 @@ const RightPanel: React.FC<RightPanelProps> = ({
                                             value={formData.outlineColor} 
                                             onChange={(val) => handleGenericChange('outlineColor', val)} 
                                             fallback="#000000"
+                                            id="text-outline-color"
                                         />
                                     </div>
                                     <div className="w-20 pb-1">
                                          <input 
+                                            id="outline-width-input"
                                             type="range" 
                                             min="0" 
                                             max="20" 
@@ -539,27 +545,27 @@ const RightPanel: React.FC<RightPanelProps> = ({
                {(formData.type === ContentType.VIDEO || formData.type === ContentType.AUDIO) && (
                    <div className="space-y-4">
                         <div className="flex items-center justify-between">
-                            <label className="text-sm text-gray-700">Autoplay</label>
-                            <input type="checkbox" checked={formData.autoplay ?? false} onChange={(e) => handleGenericChange('autoplay', e.target.checked)} className="h-4 w-4" />
+                            <label htmlFor="setting-autoplay" className="text-sm text-gray-700">Autoplay</label>
+                            <input id="setting-autoplay" type="checkbox" checked={formData.autoplay ?? false} onChange={(e) => handleGenericChange('autoplay', e.target.checked)} className="h-4 w-4" />
                         </div>
                         <div className="flex items-center justify-between">
-                            <label className="text-sm text-gray-700">Loop</label>
-                            <input type="checkbox" checked={formData.loop ?? false} onChange={(e) => handleGenericChange('loop', e.target.checked)} className="h-4 w-4" />
+                            <label htmlFor="setting-loop" className="text-sm text-gray-700">Loop</label>
+                            <input id="setting-loop" type="checkbox" checked={formData.loop ?? false} onChange={(e) => handleGenericChange('loop', e.target.checked)} className="h-4 w-4" />
                         </div>
                         {formData.type === ContentType.VIDEO && (
                             <>
                                 <div className="flex items-center justify-between">
-                                    <label className="text-sm text-gray-700">Muted</label>
-                                    <input type="checkbox" checked={formData.muted ?? false} onChange={(e) => handleGenericChange('muted', e.target.checked)} className="h-4 w-4" />
+                                    <label htmlFor="setting-muted" className="text-sm text-gray-700">Muted</label>
+                                    <input id="setting-muted" type="checkbox" checked={formData.muted ?? false} onChange={(e) => handleGenericChange('muted', e.target.checked)} className="h-4 w-4" />
                                 </div>
                                 <div className="flex items-center justify-between">
-                                    <label className="text-sm text-gray-700">Toggle Play on Click</label>
-                                    <input type="checkbox" checked={formData.videoClickToggle ?? false} onChange={(e) => handleGenericChange('videoClickToggle', e.target.checked)} className="h-4 w-4" />
+                                    <label htmlFor="setting-click-toggle" className="text-sm text-gray-700">Toggle Play on Click</label>
+                                    <input id="setting-click-toggle" type="checkbox" checked={formData.videoClickToggle ?? false} onChange={(e) => handleGenericChange('videoClickToggle', e.target.checked)} className="h-4 w-4" />
                                 </div>
                                 <div className="border-t pt-4">
                                     <div className="flex items-center justify-between mb-2">
-                                        <label className="text-sm font-medium">Chroma Key</label>
-                                        <input type="checkbox" checked={formData.chromaKey ?? false} onChange={(e) => handleGenericChange('chromaKey', e.target.checked)} className="h-4 w-4" />
+                                        <label htmlFor="setting-chroma-key" className="text-sm font-medium">Chroma Key</label>
+                                        <input id="setting-chroma-key" type="checkbox" checked={formData.chromaKey ?? false} onChange={(e) => handleGenericChange('chromaKey', e.target.checked)} className="h-4 w-4" />
                                     </div>
                                     {formData.chromaKey && (
                                         <ColorInput 
@@ -567,6 +573,7 @@ const RightPanel: React.FC<RightPanelProps> = ({
                                             value={formData.chromaColor} 
                                             onChange={(val) => handleGenericChange('chromaColor', val)}
                                             fallback="#00FF00"
+                                            id="chroma-key-color"
                                         />
                                     )}
                                 </div>
@@ -578,12 +585,12 @@ const RightPanel: React.FC<RightPanelProps> = ({
                {formData.type === ContentType.MODEL && (
                    <div className="space-y-4">
                        <div className="flex items-center justify-between">
-                            <label className="text-sm text-gray-700">Auto-animate</label>
-                            <input type="checkbox" checked={formData.animateAutostart ?? false} onChange={(e) => handleGenericChange('animateAutostart', e.target.checked)} className="h-4 w-4" />
+                            <label htmlFor="model-auto-animate" className="text-sm text-gray-700">Auto-animate</label>
+                            <input id="model-auto-animate" type="checkbox" checked={formData.animateAutostart ?? false} onChange={(e) => handleGenericChange('animateAutostart', e.target.checked)} className="h-4 w-4" />
                         </div>
                         <div>
-                            <label className="text-xs text-gray-400 block mb-1">Loop Mode</label>
-                            <select value={formData.animateLoop || 'repeat'} onChange={(e) => handleGenericChange('animateLoop', e.target.value)} className="w-full text-xs border rounded p-1 bg-transparent">
+                            <label htmlFor="model-loop-mode" className="text-xs text-gray-400 block mb-1">Loop Mode</label>
+                            <select id="model-loop-mode" value={formData.animateLoop || 'repeat'} onChange={(e) => handleGenericChange('animateLoop', e.target.value)} className="w-full text-xs border rounded p-1 bg-transparent">
                                 <option value="once">Once</option>
                                 <option value="repeat">Repeat</option>
                                 <option value="pingpong">Ping-Pong</option>
@@ -596,8 +603,9 @@ const RightPanel: React.FC<RightPanelProps> = ({
                                 
                                 {/* Material Selector */}
                                 <div className="mb-4">
-                                    <label className="text-xs text-gray-400 block mb-1">Select Material</label>
+                                    <label htmlFor="material-selector" className="text-xs text-gray-400 block mb-1">Select Material</label>
                                     <select 
+                                        id="material-selector"
                                         value={selectedMaterial || ''} 
                                         onChange={(e) => {
                                             setSelectedMaterial(e.target.value || null);
@@ -620,6 +628,7 @@ const RightPanel: React.FC<RightPanelProps> = ({
                                             value={getMaterialProp(selectedMaterial, 'color') as string}
                                             onChange={(val) => updateMaterialProp(selectedMaterial, 'color', val)}
                                             fallback="#FFFFFF"
+                                            id="material-base-color"
                                         />
 
                                         <div>
@@ -670,8 +679,9 @@ const RightPanel: React.FC<RightPanelProps> = ({
                                         {/* Metalness & Roughness */}
                                         <div className="grid grid-cols-2 gap-3">
                                             <div>
-                                                <label className="text-xs text-gray-500 font-bold block mb-1">Metalness</label>
+                                                <label htmlFor="material-metalness" className="text-xs text-gray-500 font-bold block mb-1">Metalness</label>
                                                 <input 
+                                                    id="material-metalness"
                                                     type="range" min="0" max="1" step="0.05"
                                                     value={(getMaterialProp(selectedMaterial, 'metalness') as number) ?? 0}
                                                     onChange={(e) => updateMaterialProp(selectedMaterial, 'metalness', parseFloat(e.target.value))}
@@ -679,8 +689,9 @@ const RightPanel: React.FC<RightPanelProps> = ({
                                                 />
                                             </div>
                                             <div>
-                                                <label className="text-xs text-gray-500 font-bold block mb-1">Roughness</label>
+                                                <label htmlFor="material-roughness" className="text-xs text-gray-500 font-bold block mb-1">Roughness</label>
                                                 <input 
+                                                    id="material-roughness"
                                                     type="range" min="0" max="1" step="0.05"
                                                     value={(getMaterialProp(selectedMaterial, 'roughness') as number) ?? 1}
                                                     onChange={(e) => updateMaterialProp(selectedMaterial, 'roughness', parseFloat(e.target.value))}
@@ -692,7 +703,7 @@ const RightPanel: React.FC<RightPanelProps> = ({
                                         {/* Opacity */}
                                         <div>
                                             <div className="flex justify-between items-center mb-1">
-                                                <label className="text-xs text-gray-500 font-bold">Opacity</label>
+                                                <label htmlFor="material-opacity" className="text-xs text-gray-500 font-bold">Opacity</label>
                                                 <div className="flex items-center gap-1">
                                                     <input 
                                                         type="checkbox" 
@@ -704,6 +715,7 @@ const RightPanel: React.FC<RightPanelProps> = ({
                                                 </div>
                                             </div>
                                             <input 
+                                                id="material-opacity"
                                                 type="range" min="0" max="1" step="0.05"
                                                 value={(getMaterialProp(selectedMaterial, 'opacity') as number) ?? 1}
                                                 onChange={(e) => updateMaterialProp(selectedMaterial, 'opacity', parseFloat(e.target.value))}
@@ -717,6 +729,7 @@ const RightPanel: React.FC<RightPanelProps> = ({
                                             value={getMaterialProp(selectedMaterial, 'emissive') as string}
                                             onChange={(val) => updateMaterialProp(selectedMaterial, 'emissive', val)}
                                             fallback="#000000"
+                                            id="material-emissive-color"
                                         />
 
                                         {/* Wireframe */}
@@ -752,7 +765,7 @@ const RightPanel: React.FC<RightPanelProps> = ({
             </section>
             <section className="border-t pt-6">
               <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Scripting</h4>
-              <textarea value={scriptData} onChange={handleScriptChange} className="w-full h-[300px] text-[11px] font-mono border rounded p-2 bg-gray-50 focus:bg-white transition-colors" spellCheck={false} placeholder="// function onUpdate({target, deltaTime}) { ... }" />
+              <textarea id="script-editor" value={scriptData} onChange={handleScriptChange} className="w-full h-[300px] text-[11px] font-mono border rounded p-2 bg-gray-50 focus:bg-white transition-colors" spellCheck={false} placeholder="// function onUpdate({target, deltaTime}) { ... }" />
             </section>
           </div>
         ) : (
@@ -762,8 +775,9 @@ const RightPanel: React.FC<RightPanelProps> = ({
                 {sceneSettings && (
                     <div className="space-y-4">
                         <div>
-                            <label className="text-xs text-gray-400 block mb-1">Ambient Light Intensity</label>
+                            <label htmlFor="scene-ambient-intensity" className="text-xs text-gray-400 block mb-1">Ambient Light Intensity</label>
                             <input 
+                                id="scene-ambient-intensity"
                                 type="range" min="0" max="2" step="0.1"
                                 value={sceneSettings.ambientLightIntensity ?? 0.8}
                                 onChange={(e) => handleSceneSettingChange('ambientLightIntensity', parseFloat(e.target.value))}
@@ -772,8 +786,9 @@ const RightPanel: React.FC<RightPanelProps> = ({
                             <div className="text-right text-xs text-gray-500">{sceneSettings.ambientLightIntensity}</div>
                         </div>
                         <div>
-                            <label className="text-xs text-gray-400 block mb-1">Directional Light Intensity</label>
+                            <label htmlFor="scene-directional-intensity" className="text-xs text-gray-400 block mb-1">Directional Light Intensity</label>
                             <input 
+                                id="scene-directional-intensity"
                                 type="range" min="0" max="3" step="0.1"
                                 value={sceneSettings.directionalLightIntensity ?? 1.5}
                                 onChange={(e) => handleSceneSettingChange('directionalLightIntensity', parseFloat(e.target.value))}
@@ -789,6 +804,7 @@ const RightPanel: React.FC<RightPanelProps> = ({
                                         <span className="text-[10px] text-gray-400 font-bold">{axis.toUpperCase()}</span>
                                         <input 
                                             type="number" step="1" 
+                                            name={`scene-directional-pos-${axis}`}
                                             value={sceneSettings.directionalLightPosition[i] ?? 0} 
                                             onChange={(e) => handleDirectionalLightPosChange(i, e.target.value)} 
                                             className="w-full text-xs py-1 focus:outline-none bg-transparent" 
@@ -823,7 +839,7 @@ const RightPanel: React.FC<RightPanelProps> = ({
           </div>
         )}
       </div>
-      <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileChange} />
+      <input id="right-panel-file-upload" type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileChange} />
     </aside>
   );
 };

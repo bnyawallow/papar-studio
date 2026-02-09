@@ -1,347 +1,172 @@
 
-import React, { useState, useEffect, useRef } from 'react';
-import QRCode from 'qrcode';
-import { XMarkIcon, FileIcon } from '../icons/Icons';
+"use client";
+
+import React, { useState } from 'react';
 import { Project } from '../../types';
-import { generateProjectJson, generateAFrameHtml, generateProjectZip } from '../../utils/exportUtils';
+import { XMarkIcon } from '../icons/Icons';
 import { compileFiles } from '../../utils/compiler';
-import { saveProjects, fileToBase64 } from '../../utils/storage';
+import { generateProjectZip } from '../../utils/exportUtils';
+import { ToastType } from '../ui/Toast';
+import { uploadFileToStorage } from '../../utils/storage';
 
 interface PublishModalProps {
   isOpen: boolean;
   onClose: () => void;
   project: Project;
+  onUpdateProject: (project: Project) => void;
+  onNotify: (message: string, type: ToastType) => void;
 }
 
-const PublishModal: React.FC<PublishModalProps> = ({ isOpen, onClose, project }) => {
+const PublishModal: React.FC<PublishModalProps> = ({ 
+    isOpen, 
+    onClose, 
+    project, 
+    onUpdateProject,
+    onNotify
+}) => {
   const [isCompiling, setIsCompiling] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [compiledMindFile, setCompiledMindFile] = useState<string | null>(null);
-  const [projectJson, setProjectJson] = useState('');
   const [publishUrl, setPublishUrl] = useState<string | null>(null);
-  const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null);
-  const [isPublishing, setIsPublishing] = useState(false);
-  const [isZipping, setIsZipping] = useState(false);
 
-  // AbortController to cancel operations
-  const abortControllerRef = useRef<AbortController | null>(null);
-
-  // Reset state when opened and setup abort controller
-  useEffect(() => {
-      if (isOpen) {
-          setIsCompiling(false);
-          setIsPublishing(false);
-          setIsZipping(false);
-          setPublishUrl(null);
-          setQrCodeUrl(null);
-          setProgress(0);
-          setCompiledMindFile(null);
-          setProjectJson('');
-          
-          abortControllerRef.current = new AbortController();
-      } else {
-          // If closed, abort any pending operations
-          abortControllerRef.current?.abort();
-      }
-
-      return () => {
-          // Cleanup on unmount (if isOpen was true)
-          abortControllerRef.current?.abort();
-      };
-  }, [isOpen]);
+  if (!isOpen) return null;
 
   const handleCompile = async () => {
       setIsCompiling(true);
       setProgress(0);
       try {
-          const signal = abortControllerRef.current?.signal;
+          const targets = project.targets;
+          if (targets.length === 0) {
+              throw new Error("No targets to compile.");
+          }
 
-          // Convert all target images to Files
+          // Gather images
+          // Note: compileFiles expects File objects. We need to convert URLs/Base64 to Files.
           const files: File[] = [];
-          for (const target of project.targets) {
-              if (signal?.aborted) throw new Error("Aborted");
-              const res = await fetch(target.imageUrl, { signal });
+          for (let i = 0; i < targets.length; i++) {
+              const res = await fetch(targets[i].imageUrl);
               const blob = await res.blob();
-              files.push(new File([blob], `${target.name}.jpg`, { type: blob.type }));
+              files.push(new File([blob], `target_${i}.jpg`, { type: 'image/jpeg' }));
           }
 
-          if (files.length > 0) {
-              const mindFileUrl = await compileFiles(files, (p) => {
-                  if (!signal?.aborted) setProgress(Math.round(p));
-              }, signal);
-              
-              if (signal?.aborted) return;
-              setCompiledMindFile(mindFileUrl);
-              const json = generateProjectJson(project, mindFileUrl);
-              setProjectJson(JSON.stringify(json, null, 2));
-          } else {
-              // No targets, just export structure
-              if (signal?.aborted) return;
-              const json = generateProjectJson(project, null);
-              setProjectJson(JSON.stringify(json, null, 2));
+          // Compile
+          const mindData = await compileFiles(files, (p) => setProgress(p));
+          
+          // Create Blob
+          const mindBlob = new Blob([mindData], { type: 'application/octet-stream' });
+          const mindFile = new File([mindBlob], 'targets.mind', { type: 'application/octet-stream' });
+
+          // Upload or use Object URL
+          let uploadedUrl = '';
+          try {
+             uploadedUrl = await uploadFileToStorage(mindFile);
+          } catch (e) {
+             console.warn("Cloud upload failed or not configured, using local blob URL.");
+             uploadedUrl = URL.createObjectURL(mindBlob);
           }
-      } catch (e: any) {
-          if (e.message !== "Aborted" && e.name !== "AbortError") {
-            console.error("Compilation failed", e);
-            alert("Failed to compile targets.");
-          }
+
+          // Update Project with new mind file URL (we attach it to the first target or a project field)
+          const updatedTargets = [...project.targets];
+          updatedTargets[0] = { ...updatedTargets[0], mindFileUrl: uploadedUrl };
+          
+          onUpdateProject({
+              ...project,
+              targets: updatedTargets,
+              status: 'Published'
+          });
+
+          // Generate Viewer Link
+          const viewerUrl = `${window.location.origin}/view/${project.id}`;
+          setPublishUrl(viewerUrl);
+          
+          onNotify("Compilation successful!", "success");
+      } catch (e) {
+          console.error(e);
+          onNotify("Compilation failed.", "error");
       } finally {
-          if (!abortControllerRef.current?.signal.aborted) {
-            setIsCompiling(false);
-          }
+          setIsCompiling(false);
       }
   };
 
-  const handlePublish = async () => {
-      if (!compiledMindFile) {
-          alert("Please compile the targets first.");
+  const handleDownloadZip = async () => {
+      const mindFileUrl = project.targets[0]?.mindFileUrl;
+      if (!mindFileUrl) {
+          onNotify("Please compile the project first.", 'error');
           return;
       }
-
-      setIsPublishing(true);
-      try {
-          const signal = abortControllerRef.current?.signal;
-          if (signal?.aborted) throw new Error("Aborted");
-
-          // 1. Prepare Project Data
-          // We need to persist the compiled mind file URL.
-          let persistentMindUrl = compiledMindFile;
-
-          if (compiledMindFile.startsWith('blob:')) {
-              const res = await fetch(compiledMindFile, { signal });
-              const blob = await res.blob();
-              persistentMindUrl = await new Promise((resolve) => {
-                  const reader = new FileReader();
-                  reader.onloadend = () => resolve(reader.result as string);
-                  reader.readAsDataURL(blob);
-              });
-          }
-          
-          if (signal?.aborted) throw new Error("Aborted");
-
-          // Update all targets with the same mind file URL (MindAR uses one file for multiple targets usually)
-          const updatedTargets = project.targets.map(t => ({
-              ...t,
-              mindFileUrl: persistentMindUrl
-          }));
-
-          const updatedProject: Project = { 
-              ...project, 
-              targets: updatedTargets,
-              status: 'Published' 
-          };
-          
-          // 2. Save to DB
-          await saveProjects([updatedProject]); 
-
-          if (signal?.aborted) throw new Error("Aborted");
-
-          // 3. Generate Link
-          const origin = window.location.origin;
-          // Use the API route which returns the A-Frame HTML
-          const url = `${origin}/apps/${project.id}`;
-          setPublishUrl(url);
-
-          // 4. Generate QR Code
-          const qrData = await QRCode.toDataURL(url);
-          if (!signal?.aborted) {
-             setQrCodeUrl(qrData);
-          }
-
-      } catch(e: any) {
-          if (e.message !== "Aborted" && e.name !== "AbortError") {
-            console.error(e);
-            alert("Failed to publish.");
-          }
-      } finally {
-          if (!abortControllerRef.current?.signal.aborted) {
-             setIsPublishing(false);
-          }
-      }
-  };
-
-  const handleDownload = () => {
-      if (!projectJson) return;
-      const blob = new Blob([projectJson], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${project.name.replace(/\s+/g, '_')}_config.json`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-  };
-
-  const handleDownloadMindFile = () => {
-      if (!compiledMindFile) return;
-      const a = document.createElement('a');
-      a.href = compiledMindFile;
-      a.download = "targets.mind";
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-  }
-
-  const handleDownloadAppZip = async () => {
-      if (!compiledMindFile) return;
       
-      setIsZipping(true);
       try {
-          const signal = abortControllerRef.current?.signal;
-          const blob = await generateProjectZip(project, compiledMindFile, signal);
-          
-          if (signal?.aborted) return;
-
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = `${project.name.replace(/\s+/g, '_')}_App.zip`;
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-          URL.revokeObjectURL(url);
-      } catch (e: any) {
-          if (e.message !== "Aborted" && e.name !== "AbortError") {
-            console.error("Zip generation failed", e);
-            alert("Failed to generate ZIP file.");
-          }
-      } finally {
-          if (!abortControllerRef.current?.signal.aborted) {
-            setIsZipping(false);
-          }
+        const blob = await generateProjectZip(project, mindFileUrl);
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${project.name.replace(/\s+/g, '_')}.zip`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      } catch(e) {
+          console.error(e);
+          onNotify("Failed to generate ZIP.", 'error');
       }
-  }
-
-  const handleDownloadQr = () => {
-      if (!qrCodeUrl) return;
-      const a = document.createElement('a');
-      a.href = qrCodeUrl;
-      a.download = `${project.name.replace(/\s+/g, '_')}_QR.png`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-  }
-
-  if (!isOpen) return null;
+  };
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50" aria-modal="true" role="dialog">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-3xl p-6 flex flex-col h-[90vh]">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-xl font-semibold text-gray-800">Publish & Export</h3>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-800">
-            <XMarkIcon className="w-6 h-6" />
-          </button>
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-lg p-6">
+        <div className="flex justify-between items-center mb-4 border-b pb-2">
+          <h3 className="text-xl font-bold text-gray-800">Publish Project</h3>
+          <button onClick={onClose} className="text-gray-500 hover:text-gray-800"><XMarkIcon className="w-6 h-6" /></button>
         </div>
         
-        <div className="flex-1 overflow-y-auto space-y-6 pr-2">
-            
-            {/* Step 1: Compilation */}
-            <div className="p-4 bg-gray-50 border rounded-lg">
-                <h4 className="font-bold text-gray-700 mb-2">1. Compile Targets</h4>
-                <p className="text-sm text-gray-600 mb-3">
-                    Compile your image targets into a <code>.mind</code> file optimized for tracking.
-                </p>
-                {!compiledMindFile && !isCompiling && (
+        <div className="space-y-6">
+            <div className="space-y-2">
+                <h4 className="font-semibold text-gray-700">1. Compile Target Images</h4>
+                <p className="text-sm text-gray-500">Processing images to create the tracking file (.mind). This may take a while.</p>
+                {isCompiling ? (
+                    <div className="w-full bg-gray-200 rounded-full h-4 overflow-hidden">
+                        <div className="bg-blue-600 h-4 rounded-full transition-all duration-300" style={{ width: `${progress}%` }}></div>
+                        <p className="text-xs text-center mt-1 text-gray-600">{Math.round(progress)}%</p>
+                    </div>
+                ) : (
                     <button 
-                        onClick={handleCompile}
-                        className="w-full py-2 bg-indigo-600 text-white rounded-md font-bold hover:bg-indigo-700 transition-colors shadow-sm text-sm"
+                        onClick={handleCompile} 
+                        className="w-full py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium"
                     >
-                        Compile {project.targets.length} Targets
+                        {project.targets[0]?.mindFileUrl ? "Re-Compile" : "Compile"}
                     </button>
-                )}
-                
-                {isCompiling && (
-                    <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden border">
-                        <div className="bg-indigo-600 h-full transition-all duration-300" style={{ width: `${progress}%` }}></div>
-                    </div>
-                )}
-
-                {compiledMindFile && (
-                    <div className="flex items-center justify-between bg-white border border-green-200 p-2 rounded text-green-700 text-sm">
-                        <span className="flex items-center gap-2">✅ Compiled Successfully</span>
-                        <button onClick={handleDownloadMindFile} className="underline hover:text-green-900 font-bold">Download targets.mind</button>
-                    </div>
                 )}
             </div>
 
-            {/* Step 2: Publish */}
-            <div className="p-4 bg-blue-50 border border-blue-100 rounded-lg">
-                <h4 className="font-bold text-blue-800 mb-2">2. Publish to Web</h4>
-                <p className="text-sm text-blue-700 mb-3">
-                    Publish your AR experience to a shareable URL and generate a QR code for mobile testing.
-                </p>
-                
-                {!publishUrl ? (
-                    <button 
-                        onClick={handlePublish}
-                        disabled={isPublishing || !compiledMindFile}
-                        className="w-full py-2 bg-blue-600 text-white rounded-md font-bold hover:bg-blue-700 transition-colors shadow-sm text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                        {isPublishing ? "Publishing..." : "Publish Now"}
-                    </button>
-                ) : (
-                    <div className="space-y-4">
+            {project.targets[0]?.mindFileUrl && (
+                <div className="space-y-4 pt-4 border-t">
+                    <h4 className="font-semibold text-gray-700">2. Share & Download</h4>
+                    
+                    {publishUrl && (
                         <div className="bg-white p-3 rounded border border-blue-200">
                             <p className="text-xs text-gray-500 font-bold uppercase mb-1">Public App Link</p>
                             <div className="flex gap-2">
-                                <input readOnly value={publishUrl} className="flex-1 bg-gray-100 border px-2 py-1 text-sm rounded text-gray-700 select-all" />
+                                <input id="publish-url" name="publish-url" readOnly value={publishUrl} className="flex-1 bg-gray-100 border px-2 py-1 text-sm rounded text-gray-700 select-all" />
                                 <button onClick={() => window.open(publishUrl, '_blank')} className="px-3 py-1 bg-blue-100 text-blue-700 rounded text-sm font-medium hover:bg-blue-200">Open</button>
                             </div>
                         </div>
+                    )}
 
-                        {qrCodeUrl && (
-                            <div className="flex flex-col items-center justify-center p-4 bg-white border rounded">
-                                <img src={qrCodeUrl} alt="App QR Code" className="w-48 h-48 border" />
-                                <button 
-                                    onClick={handleDownloadQr}
-                                    className="mt-2 text-sm text-blue-600 hover:underline font-medium"
-                                >
-                                    Download QR Code
-                                </button>
-                                <p className="text-[10px] text-gray-500 mt-1">Scan to test on mobile device</p>
-                            </div>
-                        )}
+                    <div className="grid grid-cols-2 gap-4">
+                        <button 
+                            onClick={handleDownloadZip}
+                            className="flex items-center justify-center gap-2 px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors text-sm font-medium"
+                        >
+                            Download ZIP
+                        </button>
+                         <button 
+                            onClick={onClose}
+                            className="flex items-center justify-center gap-2 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors text-sm font-medium"
+                        >
+                            Done
+                        </button>
                     </div>
-                )}
-            </div>
-
-            {/* Step 3: Export Code */}
-            <div className="p-4 bg-gray-50 border rounded-lg">
-                <h4 className="font-bold text-gray-700 mb-2">3. Developer Export</h4>
-                <p className="text-sm text-gray-600 mb-3">
-                    Download source files to host on your own server.
-                </p>
-                
-                <div className="flex gap-2">
-                    <button 
-                        onClick={handleDownload} 
-                        disabled={!projectJson}
-                        className="flex-1 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 disabled:opacity-50 text-sm font-medium"
-                    >
-                        Download JSON
-                    </button>
-                    <button 
-                        onClick={handleDownloadAppZip} 
-                        disabled={!compiledMindFile || isZipping}
-                        className="flex-1 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:opacity-50 text-sm font-medium flex items-center justify-center gap-2"
-                        title="Downloads a zip file containing index.html, targets.mind, and all asset files."
-                    >
-                        <FileIcon className="w-4 h-4" /> 
-                        {isZipping ? "Zipping..." : "Download App (.zip)"}
-                    </button>
                 </div>
-            </div>
-        </div>
-
-        <div className="mt-4 pt-4 border-t flex justify-end">
-          <button 
-            onClick={onClose} 
-            className="px-6 py-2 bg-gray-800 text-white rounded-md hover:bg-gray-900"
-          >
-            Close
-          </button>
+            )}
         </div>
       </div>
     </div>

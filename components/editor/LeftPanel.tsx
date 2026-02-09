@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -108,6 +109,7 @@ const LeftPanel: React.FC<LeftPanelProps> = ({
                   <div className="flex items-center gap-2 truncate">
                     {renamingTargetId === target.id ? (
                         <input
+                            id={`rename-target-${target.id}`}
                             type="text"
                             defaultValue={target.name}
                             autoFocus
@@ -173,6 +175,7 @@ const LeftPanel: React.FC<LeftPanelProps> = ({
                       <div className="flex items-center gap-2 text-sm truncate">
                         {renamingContentId === content.id ? (
                             <input
+                                id={`rename-content-${content.id}`}
                                 type="text"
                                 defaultValue={content.name}
                                 autoFocus

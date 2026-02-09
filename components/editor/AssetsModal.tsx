@@ -6,7 +6,7 @@ import { fileToBase64 } from '../../utils/storage';
 
 // Placeholders
 const PLACEHOLDER_MIND = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIiBmaWxsPSJub25lIiBzdHJva2U9ImN1cnJlbnRDb2xvciI+PHJlY3QgeD0iMjAiIHk9IjIwIiB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHJ4PSI1IiBmaWxsPSIjZjBmZGY0IiBzdHJva2U9IiMxNmEzNGEiIHN0cm9rZS13aWR0aD0iMiIvPjxwYXRoIGQ9Ik0zNSA1MGwxMCAxMCAyMC0yMCIgc3Ryb2tlPSIjMTZhMzRhIiBzdHJva2Utd2lkdGg9IjUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPjx0ZXh0IHg9IjUwIiB5PSI5MCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1zaXplPSIxMiIgZmlsbD0iIzE2YTM0YSI+TUlORDwvdGV4dD48L3N2Zz4=";
-const PLACEHOLDER_SCRIPT = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIiBmaWxsPSJub25lIiBzdHJva2U9ImN1cnJlbnRDb2xvciI+PHJlY3QgeD0iMjAiIHk9IjIwIiB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHJ4PSI1IiBmaWxsPSIjZmVmY2U4IiBzdHJva2U9IiNjYThhMDQiIHN0cm9rZS13aWR0aD0iMiIvPjxwYXRoIGQ9Ik0zNSAzNWgzMCBNMzUgNTBoMzAgTTM1IDY1aDIwIiBzdHJva2U9IiNjYThhMDQiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPjx0ZXh0IHg9IjUwIiB5PSI5MCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1zaXplPSIxMiIgZmlsbD0iIzE2YTM0YSI+SlM8L3RleHQ+PC9zdmc+";
+const PLACEHOLDER_SCRIPT = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIiBmaWxsPSJub25lIiBzdHJva2U9ImN1cnJlbnRDb2xvciI+PHJlY3QgeD0iMjAiIHk9IjIwIiB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHJ4PSI1IiBmaWxsPSIjZmVmY2U4IiBzdHJva2U9IiNjYThhMDQiIHN0cm9rZS13aWR0aD0iMiIvPjxwYXRoIGQ9Ik0zNSA1MGwxMCAxMCAyMC0yMCIgc3Ryb2tlPSIjMTZhMzRhIiBzdHJva2Utd2lkdGg9IjUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPjx0ZXh0IHg9IjUwIiB5PSI5MCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1zaXplPSIxMiIgZmlsbD0iIzE2YTM0YSI+SlM8L3RleHQ+PC9zdmc+";
 
 interface AssetsModalProps {
   isOpen: boolean;
@@ -83,9 +83,9 @@ const UploadImageView = ({ onBack, onAdd, assets }: { onBack: () => void, onAdd:
                     >
                         {previewUrl ? <img src={previewUrl} className="w-full h-full object-contain" /> : <div className="text-center text-gray-400"><ImageIcon className="w-8 h-8 mx-auto mb-1" /><span className="text-xs">Drop image here</span></div>}
                     </div>
-                    <input type="file" ref={inputRef} onChange={(e) => e.target.files && handleFileChange(e.target.files[0])} accept="image/*" className="hidden" />
+                    <input id="upload-image-file" name="upload-image-file" type="file" ref={inputRef} onChange={(e) => e.target.files && handleFileChange(e.target.files[0])} accept="image/*" className="hidden" />
                 </div>
-                <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Asset Name" className="w-full px-3 py-2 border rounded-md" />
+                <input id="upload-image-name" name="upload-image-name" type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Asset Name" className="w-full px-3 py-2 border rounded-md" />
                 <p className="text-xs text-gray-500">
                     This image can be used as a Target (for tracking) or as content (displayed in the scene).
                 </p>
@@ -148,8 +148,8 @@ const UploadFileView = ({ onBack, onAdd, assets, type, title, icon, accept }: { 
                     {previewUrl && type === 'video' && <video src={previewUrl} className="w-full h-full object-contain pointer-events-none" muted />}
                     {!previewUrl && <div className="text-center text-gray-400">{icon}<span className="text-xs block mt-1">{selectedFile ? selectedFile.name : "Drop file here"}</span></div>}
                 </div>
-                <input type="file" ref={inputRef} onChange={(e) => e.target.files && handleFileChange(e.target.files[0])} accept={accept} className="hidden" />
-                <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Asset Name" className="w-full px-3 py-2 border rounded-md" />
+                <input id={`upload-${type}-file`} name={`upload-${type}-file`} type="file" ref={inputRef} onChange={(e) => e.target.files && handleFileChange(e.target.files[0])} accept={accept} className="hidden" />
+                <input id={`upload-${type}-name`} name={`upload-${type}-name`} type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Asset Name" className="w-full px-3 py-2 border rounded-md" />
             </div>
             <div className="mt-4 pt-4 border-t flex justify-end">
                 <button onClick={handleAdd} disabled={!selectedFile} className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 font-medium">Upload</button>
@@ -222,7 +222,7 @@ export const AssetsModal: React.FC<AssetsModalProps> = ({ isOpen, onClose, onAdd
                     <button onClick={() => genericInputRef.current?.click()} className="flex items-center gap-2 px-4 py-2 bg-gray-50 text-gray-700 rounded-md hover:bg-gray-100 border border-gray-200 transition-colors font-medium text-sm whitespace-nowrap ml-auto">
                         <UploadIcon className="w-4 h-4" /> Batch Upload
                     </button>
-                    <input type="file" ref={genericInputRef} className="hidden" multiple onChange={handleGenericFileUpload} />
+                    <input id="batch-upload-input" name="batch-upload-input" type="file" ref={genericInputRef} className="hidden" multiple onChange={handleGenericFileUpload} />
                 </div>
 
                 <div className="flex-1 overflow-y-auto bg-gray-100 rounded-md p-4 border border-inner">

@@ -250,9 +250,17 @@ export const generateAFrameHtml = (project: Project, localAssetMap?: Map<string,
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>${project.name}</title>
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
     <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.2.0/dist/aframe-extras.min.js"></script>
     <script>
+      // Check for secure context or localhost to ensure camera access
+      if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1' && window.location.protocol !== 'https:') {
+          console.warn('Camera access may be blocked. Please use HTTPS or localhost.');
+          if (window.location.protocol === 'file:') {
+             alert('Camera access is not supported via file:// protocol. Please run this app via a local server (e.g. using VS Code Live Server, http-server, or python -m http.server).');
+          }
+      }
+
       // Simple click handler for videos to ensure they play on mobile
       AFRAME.registerComponent('click-handler', {
         init: function () {
@@ -271,7 +279,7 @@ export const generateAFrameHtml = (project: Project, localAssetMap?: Map<string,
   </head>
   <body>
     <a-scene 
-      mindar-image="imageTargetSrc: ./targets.mind; maxTrack: ${config.maxTrack}; warmupTolerance: ${config.warmupTolerance}; missTolerance: ${config.missTolerance}; filterMinCF: ${config.filterMinCF}; filterBeta: ${config.filterBeta};" 
+      mindar-image="imageTargetSrc: ./targets.mind; maxTrack: ${config.maxTrack}; warmupTolerance: ${config.warmupTolerance}; missTolerance: ${config.missTolerance}; filterMinCF: ${config.filterMinCF}; filterBeta: ${config.filterBeta}; uiError: yes;" 
       color-space="sRGB" 
       renderer="colorManagement: true, physicallyCorrectLights" 
       vr-mode-ui="enabled: false" 

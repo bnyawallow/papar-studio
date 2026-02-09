@@ -7,7 +7,7 @@ import { useDebounce } from '../../hooks/useDebounce';
 import { equal } from '@wry/equality';
 import { ToastType } from '../ui/Toast';
 import { fileToBase64 } from '../../utils/storage';
-import { ImageIcon, YoutubeIcon, VideoIcon } from '../icons/Icons';
+import { ImageIcon, YoutubeIcon, VideoIcon, AlignLeftIcon, AlignCenterIcon, AlignRightIcon, BoldIcon, ItalicIcon } from '../icons/Icons';
 
 interface RightPanelProps {
   width: number;
@@ -30,6 +30,43 @@ const round2 = (num: number) => Math.round((num + Number.EPSILON) * 100) / 100;
 const safeColor = (color?: string, fallback = '#000000') => {
     if (!color || color === 'transparent') return fallback;
     return color;
+};
+
+// Enhanced Color Picker Component
+const ColorInput = ({ label, value, onChange, fallback = '#000000' }: { label: string, value?: string, onChange: (val: string) => void, fallback?: string }) => {
+    const currentColor = safeColor(value, fallback);
+    
+    const handleHexChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        let val = e.target.value.replace(/[^0-9A-F]/ig, '').toUpperCase();
+        if (val.length > 6) val = val.slice(0, 6);
+        onChange('#' + val);
+    };
+
+    return (
+        <div>
+            <label className="text-xs text-gray-500 font-bold block mb-1 uppercase tracking-wider">{label}</label>
+            <div className="flex gap-2 items-center">
+                <div className="relative w-8 h-8 rounded border border-gray-300 overflow-hidden shrink-0 shadow-sm">
+                    <input 
+                        type="color" 
+                        value={currentColor} 
+                        onChange={(e) => onChange(e.target.value)} 
+                        className="absolute -top-2 -left-2 w-12 h-12 p-0 border-0 cursor-pointer" 
+                    />
+                </div>
+                <div className="flex-1 relative">
+                    <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 text-xs font-mono select-none">#</span>
+                    <input
+                        type="text"
+                        value={currentColor.replace('#', '').toUpperCase()}
+                        onChange={handleHexChange}
+                        className="w-full pl-5 pr-2 py-1.5 text-xs border border-gray-300 rounded bg-white focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none font-mono transition-all uppercase"
+                        maxLength={6}
+                    />
+                </div>
+            </div>
+        </div>
+    );
 };
 
 const RightPanel: React.FC<RightPanelProps> = ({ 
@@ -405,23 +442,95 @@ const RightPanel: React.FC<RightPanelProps> = ({
                {formData.type === ContentType.TEXT && (
                    <div className="space-y-4">
                        <div>
-                           <label className="text-xs text-gray-400 block mb-1">Text Content</label>
-                           <textarea value={formData.textContent || ''} onChange={(e) => handleGenericChange('textContent', e.target.value)} className="w-full text-xs border rounded p-2 h-20" />
+                           <label className="text-xs text-gray-500 font-bold block mb-1 uppercase tracking-wider">Content</label>
+                           <textarea value={formData.textContent || ''} onChange={(e) => handleGenericChange('textContent', e.target.value)} className="w-full text-sm border border-gray-300 rounded p-2 h-24 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-shadow" />
                        </div>
+                       
+                       <div className="grid grid-cols-2 gap-3">
+                           <div>
+                               <label className="text-xs text-gray-500 font-bold block mb-1 uppercase tracking-wider">Font Family</label>
+                               <select value={formData.font || 'Arial'} onChange={(e) => handleGenericChange('font', e.target.value)} className="w-full text-xs border border-gray-300 rounded p-2 bg-white focus:ring-2 focus:ring-blue-500 outline-none">
+                                   {Object.keys(FONT_MAP).map(f => <option key={f} value={f}>{f}</option>)}
+                               </select>
+                           </div>
+                           <div>
+                               <label className="text-xs text-gray-500 font-bold block mb-1 uppercase tracking-wider">Size</label>
+                               <input type="number" min="1" value={formData.size || 50} onChange={(e) => handleGenericChange('size', parseInt(e.target.value))} className="w-full text-xs border border-gray-300 rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none" />
+                           </div>
+                       </div>
+
                        <div>
-                           <label className="text-xs text-gray-400 block mb-1">Font</label>
-                           <select value={formData.font || 'Arial'} onChange={(e) => handleGenericChange('font', e.target.value)} className="w-full text-xs border rounded p-1 bg-transparent">
-                               {Object.keys(FONT_MAP).map(f => <option key={f} value={f}>{f}</option>)}
-                           </select>
+                           <label className="text-xs text-gray-500 font-bold block mb-1 uppercase tracking-wider">Style & Alignment</label>
+                           <div className="flex gap-2">
+                               <div className="flex bg-gray-100 rounded p-1 gap-1 border border-gray-200">
+                                   <button 
+                                        className={`p-1.5 rounded hover:bg-white transition-colors ${formData.weight === 'bold' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-600'}`}
+                                        onClick={() => handleGenericChange('weight', formData.weight === 'bold' ? 'normal' : 'bold')}
+                                        title="Bold"
+                                   >
+                                       <BoldIcon className="w-4 h-4" />
+                                   </button>
+                                   <button 
+                                        className={`p-1.5 rounded hover:bg-white transition-colors ${formData.style === 'italic' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-600'}`}
+                                        onClick={() => handleGenericChange('style', formData.style === 'italic' ? 'normal' : 'italic')}
+                                        title="Italic"
+                                   >
+                                       <ItalicIcon className="w-4 h-4" />
+                                   </button>
+                               </div>
+                               
+                               <div className="w-px bg-gray-300 mx-1"></div>
+
+                               <div className="flex bg-gray-100 rounded p-1 gap-1 border border-gray-200 flex-1 justify-center">
+                                   {['left', 'center', 'right'].map((align) => (
+                                       <button 
+                                            key={align}
+                                            className={`p-1.5 rounded hover:bg-white transition-colors flex-1 flex justify-center ${formData.align === align ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-600'}`}
+                                            onClick={() => handleGenericChange('align', align)}
+                                            title={`Align ${align.charAt(0).toUpperCase() + align.slice(1)}`}
+                                       >
+                                           {align === 'left' && <AlignLeftIcon className="w-4 h-4" />}
+                                           {align === 'center' && <AlignCenterIcon className="w-4 h-4" />}
+                                           {align === 'right' && <AlignRightIcon className="w-4 h-4" />}
+                                       </button>
+                                   ))}
+                               </div>
+                           </div>
                        </div>
-                       <div className="grid grid-cols-2 gap-4">
+
+                       <div className="space-y-4 pt-2 border-t border-dashed">
+                            <ColorInput 
+                                label="Text Color" 
+                                value={formData.color} 
+                                onChange={(val) => handleGenericChange('color', val)} 
+                            />
+                            
                             <div>
-                                <label className="text-xs text-gray-400 block mb-1">Color</label>
-                                <input type="color" value={safeColor(formData.color)} onChange={(e) => handleGenericChange('color', e.target.value)} className="w-full h-8" />
-                            </div>
-                            <div>
-                                <label className="text-xs text-gray-400 block mb-1">Outline</label>
-                                <input type="color" value={safeColor(formData.outlineColor, 'transparent' /* Input doesn't support transparent, use fallback if invalid but keep as is if valid hex */)} onChange={(e) => handleGenericChange('outlineColor', e.target.value)} className="w-full h-8" />
+                                <div className="flex justify-between items-center mb-1">
+                                    <label className="text-xs text-gray-500 font-bold uppercase tracking-wider">Outline Color</label>
+                                    <span className="text-[10px] text-gray-400">Width: {formData.outlineWidth || 0}%</span>
+                                </div>
+                                <div className="flex gap-2 items-end">
+                                    <div className="flex-1">
+                                        <ColorInput 
+                                            label="" 
+                                            value={formData.outlineColor} 
+                                            onChange={(val) => handleGenericChange('outlineColor', val)} 
+                                            fallback="#000000"
+                                        />
+                                    </div>
+                                    <div className="w-20 pb-1">
+                                         <input 
+                                            type="range" 
+                                            min="0" 
+                                            max="20" 
+                                            step="0.5" 
+                                            value={formData.outlineWidth || 0} 
+                                            onChange={(e) => handleGenericChange('outlineWidth', parseFloat(e.target.value))}
+                                            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                                         />
+                                    </div>
+                                </div>
                             </div>
                        </div>
                    </div>
@@ -453,10 +562,12 @@ const RightPanel: React.FC<RightPanelProps> = ({
                                         <input type="checkbox" checked={formData.chromaKey ?? false} onChange={(e) => handleGenericChange('chromaKey', e.target.checked)} className="h-4 w-4" />
                                     </div>
                                     {formData.chromaKey && (
-                                        <div>
-                                            <label className="text-xs text-gray-400 block mb-1">Key Color</label>
-                                            <input type="color" value={safeColor(formData.chromaColor, '#00ff00')} onChange={(e) => handleGenericChange('chromaColor', e.target.value)} className="w-full h-8" />
-                                        </div>
+                                        <ColorInput 
+                                            label="Key Color" 
+                                            value={formData.chromaColor} 
+                                            onChange={(val) => handleGenericChange('chromaColor', val)}
+                                            fallback="#00FF00"
+                                        />
                                     )}
                                 </div>
                             </>
@@ -504,23 +615,20 @@ const RightPanel: React.FC<RightPanelProps> = ({
                                 {selectedMaterial && (
                                     <div className="space-y-4 bg-gray-50 p-3 rounded-lg border">
                                         {/* Color (Albedo) */}
+                                        <ColorInput 
+                                            label="Base Color"
+                                            value={getMaterialProp(selectedMaterial, 'color') as string}
+                                            onChange={(val) => updateMaterialProp(selectedMaterial, 'color', val)}
+                                            fallback="#FFFFFF"
+                                        />
+
                                         <div>
-                                            <label className="text-xs text-gray-500 font-bold block mb-1">Base Color</label>
-                                            <div className="flex gap-2">
-                                                <input 
-                                                    type="color" 
-                                                    value={safeColor(getMaterialProp(selectedMaterial, 'color') as string, '#ffffff')} 
-                                                    onChange={(e) => updateMaterialProp(selectedMaterial, 'color', e.target.value)} 
-                                                    className="w-8 h-8 rounded border cursor-pointer" 
-                                                />
-                                                <div className="flex-1">
-                                                    <div 
-                                                        className="w-full h-8 border rounded bg-white flex items-center px-2 cursor-pointer text-xs text-gray-500 hover:bg-gray-100"
-                                                        onClick={() => setOpenImagePicker(!openImagePicker)}
-                                                    >
-                                                        {getMaterialProp(selectedMaterial, 'map') ? 'Texture Set' : 'No Texture'}
-                                                    </div>
-                                                </div>
+                                            <label className="text-xs text-gray-500 font-bold block mb-1 uppercase tracking-wider">Texture</label>
+                                            <div 
+                                                className="w-full h-8 border rounded bg-white flex items-center px-2 cursor-pointer text-xs text-gray-500 hover:bg-gray-100"
+                                                onClick={() => setOpenImagePicker(!openImagePicker)}
+                                            >
+                                                {getMaterialProp(selectedMaterial, 'map') ? 'Texture Set' : 'No Texture'}
                                             </div>
                                             {/* Image Picker for Texture */}
                                             {openImagePicker && (
@@ -567,7 +675,7 @@ const RightPanel: React.FC<RightPanelProps> = ({
                                                     type="range" min="0" max="1" step="0.05"
                                                     value={(getMaterialProp(selectedMaterial, 'metalness') as number) ?? 0}
                                                     onChange={(e) => updateMaterialProp(selectedMaterial, 'metalness', parseFloat(e.target.value))}
-                                                    className="w-full"
+                                                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
                                                 />
                                             </div>
                                             <div>
@@ -576,7 +684,7 @@ const RightPanel: React.FC<RightPanelProps> = ({
                                                     type="range" min="0" max="1" step="0.05"
                                                     value={(getMaterialProp(selectedMaterial, 'roughness') as number) ?? 1}
                                                     onChange={(e) => updateMaterialProp(selectedMaterial, 'roughness', parseFloat(e.target.value))}
-                                                    className="w-full"
+                                                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
                                                 />
                                             </div>
                                         </div>
@@ -599,20 +707,17 @@ const RightPanel: React.FC<RightPanelProps> = ({
                                                 type="range" min="0" max="1" step="0.05"
                                                 value={(getMaterialProp(selectedMaterial, 'opacity') as number) ?? 1}
                                                 onChange={(e) => updateMaterialProp(selectedMaterial, 'opacity', parseFloat(e.target.value))}
-                                                className="w-full"
+                                                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
                                             />
                                         </div>
 
                                         {/* Emissive */}
-                                        <div>
-                                            <label className="text-xs text-gray-500 font-bold block mb-1">Emissive</label>
-                                            <input 
-                                                type="color" 
-                                                value={safeColor(getMaterialProp(selectedMaterial, 'emissive') as string, '#000000')} 
-                                                onChange={(e) => updateMaterialProp(selectedMaterial, 'emissive', e.target.value)} 
-                                                className="w-full h-6 rounded border cursor-pointer" 
-                                            />
-                                        </div>
+                                        <ColorInput 
+                                            label="Emissive"
+                                            value={getMaterialProp(selectedMaterial, 'emissive') as string}
+                                            onChange={(val) => updateMaterialProp(selectedMaterial, 'emissive', val)}
+                                            fallback="#000000"
+                                        />
 
                                         {/* Wireframe */}
                                         <div className="flex items-center gap-2 pt-2 border-t border-gray-200">
@@ -662,7 +767,7 @@ const RightPanel: React.FC<RightPanelProps> = ({
                                 type="range" min="0" max="2" step="0.1"
                                 value={sceneSettings.ambientLightIntensity ?? 0.8}
                                 onChange={(e) => handleSceneSettingChange('ambientLightIntensity', parseFloat(e.target.value))}
-                                className="w-full"
+                                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
                             />
                             <div className="text-right text-xs text-gray-500">{sceneSettings.ambientLightIntensity}</div>
                         </div>
@@ -672,7 +777,7 @@ const RightPanel: React.FC<RightPanelProps> = ({
                                 type="range" min="0" max="3" step="0.1"
                                 value={sceneSettings.directionalLightIntensity ?? 1.5}
                                 onChange={(e) => handleSceneSettingChange('directionalLightIntensity', parseFloat(e.target.value))}
-                                className="w-full"
+                                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
                             />
                             <div className="text-right text-xs text-gray-500">{sceneSettings.directionalLightIntensity}</div>
                         </div>

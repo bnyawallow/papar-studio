@@ -1,10 +1,11 @@
 
 import React, { useState, useEffect } from 'react';
+import QRCode from 'qrcode';
 import { XMarkIcon, FileIcon } from '../icons/Icons';
 import { Project } from '../../types';
 import { generateProjectJson, generateAFrameHtml, generateProjectZip } from '../../utils/exportUtils';
 import { compileFiles } from '../../utils/compiler';
-import { saveProjects } from '../../utils/storage';
+import { saveProjects, fileToBase64 } from '../../utils/storage';
 
 interface PublishModalProps {
   isOpen: boolean;
@@ -18,6 +19,7 @@ const PublishModal: React.FC<PublishModalProps> = ({ isOpen, onClose, project })
   const [compiledMindFile, setCompiledMindFile] = useState<string | null>(null);
   const [projectJson, setProjectJson] = useState('');
   const [publishUrl, setPublishUrl] = useState<string | null>(null);
+  const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null);
   const [isPublishing, setIsPublishing] = useState(false);
   const [isZipping, setIsZipping] = useState(false);
 
@@ -28,13 +30,12 @@ const PublishModal: React.FC<PublishModalProps> = ({ isOpen, onClose, project })
           setIsPublishing(false);
           setIsZipping(false);
           setPublishUrl(null);
+          setQrCodeUrl(null);
           setProgress(0);
           setCompiledMindFile(null);
           setProjectJson('');
       }
   }, [isOpen]);
-
-  if (!isOpen) return null;
 
   const handleCompile = async () => {
       setIsCompiling(true);
@@ -67,23 +68,55 @@ const PublishModal: React.FC<PublishModalProps> = ({ isOpen, onClose, project })
   };
 
   const handlePublish = async () => {
+      if (!compiledMindFile) {
+          alert("Please compile the targets first.");
+          return;
+      }
+
       setIsPublishing(true);
       try {
-          // 1. Update Project Status
-          const updatedProject: Project = { ...project, status: 'Published' };
+          // 1. Prepare Project Data
+          // We need to persist the compiled mind file URL.
+          // If it's a blob URL, we should ideally convert to Data URI or upload it.
+          // For this demo environment, let's convert to Data URI to ensure it persists in JSON storage
+          // even if the blob URL session expires (though blob URLs don't work cross-tab anyway).
+          
+          let persistentMindUrl = compiledMindFile;
+
+          if (compiledMindFile.startsWith('blob:')) {
+              const res = await fetch(compiledMindFile);
+              const blob = await res.blob();
+              persistentMindUrl = await new Promise((resolve) => {
+                  const reader = new FileReader();
+                  reader.onloadend = () => resolve(reader.result as string);
+                  reader.readAsDataURL(blob);
+              });
+          }
+
+          // Update all targets with the same mind file URL (MindAR uses one file for multiple targets usually)
+          const updatedTargets = project.targets.map(t => ({
+              ...t,
+              mindFileUrl: persistentMindUrl
+          }));
+
+          const updatedProject: Project = { 
+              ...project, 
+              targets: updatedTargets,
+              status: 'Published' 
+          };
           
           // 2. Save to DB
-          // Note: In a real app we'd pass a specific save handler, here we use the global util 
-          // which requires the full list, but we'll try to just update this one if possible or use what we have.
-          // Since we don't have the full list prop here, we assume the parent updates local state, 
-          // but we want to ensure DB persistence.
           await saveProjects([updatedProject]); 
 
           // 3. Generate Link
-          // Get current origin (e.g., https://your-vercel-app.vercel.app or localhost)
           const origin = window.location.origin;
-          const url = `${origin}/view/${project.id}`;
+          // Use the API route which returns the A-Frame HTML
+          const url = `${origin}/apps/${project.id}`;
           setPublishUrl(url);
+
+          // 4. Generate QR Code
+          const qrData = await QRCode.toDataURL(url);
+          setQrCodeUrl(qrData);
 
       } catch(e) {
           console.error(e);
@@ -138,9 +171,19 @@ const PublishModal: React.FC<PublishModalProps> = ({ isOpen, onClose, project })
       }
   }
 
+  const handleDownloadQr = () => {
+      if (!qrCodeUrl) return;
+      const a = document.createElement('a');
+      a.href = qrCodeUrl;
+      a.download = `${project.name.replace(/\s+/g, '_')}_QR.png`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+  }
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50" aria-modal="true" role="dialog">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-3xl p-6 flex flex-col h-[85vh]">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-3xl p-6 flex flex-col h-[90vh]">
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-xl font-semibold text-gray-800">Publish & Export</h3>
           <button onClick={onClose} className="text-gray-500 hover:text-gray-800">
@@ -183,24 +226,39 @@ const PublishModal: React.FC<PublishModalProps> = ({ isOpen, onClose, project })
             <div className="p-4 bg-blue-50 border border-blue-100 rounded-lg">
                 <h4 className="font-bold text-blue-800 mb-2">2. Publish to Web</h4>
                 <p className="text-sm text-blue-700 mb-3">
-                    Make this project accessible via a public URL hosted on this platform.
+                    Publish your AR experience to a shareable URL and generate a QR code for mobile testing.
                 </p>
                 
                 {!publishUrl ? (
                     <button 
                         onClick={handlePublish}
-                        disabled={isPublishing}
-                        className="w-full py-2 bg-blue-600 text-white rounded-md font-bold hover:bg-blue-700 transition-colors shadow-sm text-sm disabled:opacity-50"
+                        disabled={isPublishing || !compiledMindFile}
+                        className="w-full py-2 bg-blue-600 text-white rounded-md font-bold hover:bg-blue-700 transition-colors shadow-sm text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         {isPublishing ? "Publishing..." : "Publish Now"}
                     </button>
                 ) : (
-                    <div className="bg-white p-3 rounded border border-blue-200">
-                        <p className="text-xs text-gray-500 font-bold uppercase mb-1">Public Link</p>
-                        <div className="flex gap-2">
-                            <input readOnly value={publishUrl} className="flex-1 bg-gray-100 border px-2 py-1 text-sm rounded text-gray-700 select-all" />
-                            <button onClick={() => window.open(publishUrl, '_blank')} className="px-3 py-1 bg-blue-100 text-blue-700 rounded text-sm font-medium hover:bg-blue-200">Open</button>
+                    <div className="space-y-4">
+                        <div className="bg-white p-3 rounded border border-blue-200">
+                            <p className="text-xs text-gray-500 font-bold uppercase mb-1">Public App Link</p>
+                            <div className="flex gap-2">
+                                <input readOnly value={publishUrl} className="flex-1 bg-gray-100 border px-2 py-1 text-sm rounded text-gray-700 select-all" />
+                                <button onClick={() => window.open(publishUrl, '_blank')} className="px-3 py-1 bg-blue-100 text-blue-700 rounded text-sm font-medium hover:bg-blue-200">Open</button>
+                            </div>
                         </div>
+
+                        {qrCodeUrl && (
+                            <div className="flex flex-col items-center justify-center p-4 bg-white border rounded">
+                                <img src={qrCodeUrl} alt="App QR Code" className="w-48 h-48 border" />
+                                <button 
+                                    onClick={handleDownloadQr}
+                                    className="mt-2 text-sm text-blue-600 hover:underline font-medium"
+                                >
+                                    Download QR Code
+                                </button>
+                                <p className="text-[10px] text-gray-500 mt-1">Scan to test on mobile device</p>
+                            </div>
+                        )}
                     </div>
                 )}
             </div>
@@ -212,21 +270,13 @@ const PublishModal: React.FC<PublishModalProps> = ({ isOpen, onClose, project })
                     Download source files to host on your own server.
                 </p>
                 
-                {projectJson && (
-                    <div className="flex-1 overflow-hidden border border-gray-300 rounded-md bg-white relative mb-3 h-20">
-                        <pre className="w-full h-full overflow-auto p-2 text-[10px] font-mono text-gray-700">
-                            {projectJson}
-                        </pre>
-                    </div>
-                )}
-
                 <div className="flex gap-2">
                     <button 
                         onClick={handleDownload} 
                         disabled={!projectJson}
                         className="flex-1 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 disabled:opacity-50 text-sm font-medium"
                     >
-                        Download Config JSON
+                        Download JSON
                     </button>
                     <button 
                         onClick={handleDownloadAppZip} 
@@ -238,11 +288,6 @@ const PublishModal: React.FC<PublishModalProps> = ({ isOpen, onClose, project })
                         {isZipping ? "Zipping..." : "Download App (.zip)"}
                     </button>
                 </div>
-                {compiledMindFile && (
-                    <p className="text-[10px] text-gray-500 mt-2 italic">
-                        * The App .zip includes all your assets, the compiled targets file, and a configured index.html ready for local hosting.
-                    </p>
-                )}
             </div>
         </div>
 

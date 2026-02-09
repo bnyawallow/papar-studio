@@ -157,7 +157,7 @@ const convertContent = (content: Content) => {
   };
 };
 
-export const generateAFrameHtml = (project: Project, localAssetMap?: Map<string, string>): string => {
+export const generateAFrameHtml = (project: Project, localAssetMap?: Map<string, string>, mindFileUrl: string = './targets.mind'): string => {
     const config = project.mindARConfig || {
         maxTrack: 1,
         warmupTolerance: 5,
@@ -249,7 +249,7 @@ export const generateAFrameHtml = (project: Project, localAssetMap?: Map<string,
   <head>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>${project.name}</title>
-    <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+    <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
     <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.2.0/dist/aframe-extras.min.js"></script>
     <script>
@@ -279,7 +279,7 @@ export const generateAFrameHtml = (project: Project, localAssetMap?: Map<string,
   </head>
   <body>
     <a-scene 
-      mindar-image="imageTargetSrc: ./targets.mind; maxTrack: ${config.maxTrack}; warmupTolerance: ${config.warmupTolerance}; missTolerance: ${config.missTolerance}; filterMinCF: ${config.filterMinCF}; filterBeta: ${config.filterBeta}; uiError: yes;" 
+      mindar-image="imageTargetSrc: ${mindFileUrl}; maxTrack: ${config.maxTrack}; warmupTolerance: ${config.warmupTolerance}; missTolerance: ${config.missTolerance}; filterMinCF: ${config.filterMinCF}; filterBeta: ${config.filterBeta}; uiError: yes;" 
       color-space="sRGB" 
       renderer="colorManagement: true, physicallyCorrectLights" 
       vr-mode-ui="enabled: false" 
@@ -361,7 +361,7 @@ export const generateProjectZip = async (project: Project, mindFileUrl: string):
     await Promise.all(assetPromises);
 
     // 3. Generate HTML with local paths
-    const htmlContent = generateAFrameHtml(project, localPathMap);
+    const htmlContent = generateAFrameHtml(project, localPathMap, './targets.mind');
     zip.file("index.html", htmlContent);
 
     // 4. Generate ZIP blob

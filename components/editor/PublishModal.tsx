@@ -223,6 +223,8 @@ const PublishModal: React.FC<PublishModalProps> = ({ isOpen, onClose, project })
       document.body.removeChild(a);
   }
 
+  if (!isOpen) return null;
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50" aria-modal="true" role="dialog">
       <div className="bg-white rounded-lg shadow-xl w-full max-w-3xl p-6 flex flex-col h-[90vh]">

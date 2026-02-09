@@ -1,9 +1,8 @@
 
-
 import React, { useState, useEffect } from 'react';
 import { XMarkIcon, FileIcon } from '../icons/Icons';
 import { Project } from '../../types';
-import { generateProjectJson, generateAFrameHtml } from '../../utils/exportUtils';
+import { generateProjectJson, generateAFrameHtml, generateProjectZip } from '../../utils/exportUtils';
 import { compileFiles } from '../../utils/compiler';
 import { saveProjects } from '../../utils/storage';
 
@@ -20,12 +19,14 @@ const PublishModal: React.FC<PublishModalProps> = ({ isOpen, onClose, project })
   const [projectJson, setProjectJson] = useState('');
   const [publishUrl, setPublishUrl] = useState<string | null>(null);
   const [isPublishing, setIsPublishing] = useState(false);
+  const [isZipping, setIsZipping] = useState(false);
 
   // Reset state when opened
   useEffect(() => {
       if (isOpen) {
           setIsCompiling(false);
           setIsPublishing(false);
+          setIsZipping(false);
           setPublishUrl(null);
           setProgress(0);
           setCompiledMindFile(null);
@@ -115,18 +116,26 @@ const PublishModal: React.FC<PublishModalProps> = ({ isOpen, onClose, project })
       document.body.removeChild(a);
   }
 
-  const handleDownloadHtml = () => {
+  const handleDownloadAppZip = async () => {
       if (!compiledMindFile) return;
-      const htmlContent = generateAFrameHtml(project);
-      const blob = new Blob([htmlContent], { type: 'text/html' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = "index.html";
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      
+      setIsZipping(true);
+      try {
+          const blob = await generateProjectZip(project, compiledMindFile);
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `${project.name.replace(/\s+/g, '_')}_App.zip`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+      } catch (e) {
+          console.error("Zip generation failed", e);
+          alert("Failed to generate ZIP file.");
+      } finally {
+          setIsZipping(false);
+      }
   }
 
   return (
@@ -220,17 +229,18 @@ const PublishModal: React.FC<PublishModalProps> = ({ isOpen, onClose, project })
                         Download Config JSON
                     </button>
                     <button 
-                        onClick={handleDownloadHtml} 
-                        disabled={!compiledMindFile}
+                        onClick={handleDownloadAppZip} 
+                        disabled={!compiledMindFile || isZipping}
                         className="flex-1 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:opacity-50 text-sm font-medium flex items-center justify-center gap-2"
-                        title="Generates a single HTML file using A-Frame. Requires targets.mind in same folder."
+                        title="Downloads a zip file containing index.html, targets.mind, and all asset files."
                     >
-                        <FileIcon className="w-4 h-4" /> Download A-Frame App
+                        <FileIcon className="w-4 h-4" /> 
+                        {isZipping ? "Zipping..." : "Download App (.zip)"}
                     </button>
                 </div>
                 {compiledMindFile && (
                     <p className="text-[10px] text-gray-500 mt-2 italic">
-                        * For the A-Frame App to work, place the downloaded <strong>index.html</strong> and <strong>targets.mind</strong> in the same folder.
+                        * The App .zip includes all your assets, the compiled targets file, and a configured index.html ready for local hosting.
                     </p>
                 )}
             </div>

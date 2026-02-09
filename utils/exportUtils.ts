@@ -1,6 +1,6 @@
 
-
 import { Project, Target, Content, ContentType } from '../types';
+import JSZip from 'jszip';
 
 // Helper to match refcode structure
 export const generateProjectJson = (project: Project, masterMindFileUrl: string | null = null) => {
@@ -157,7 +157,7 @@ const convertContent = (content: Content) => {
   };
 };
 
-export const generateAFrameHtml = (project: Project): string => {
+export const generateAFrameHtml = (project: Project, localAssetMap?: Map<string, string>): string => {
     const config = project.mindARConfig || {
         maxTrack: 1,
         warmupTolerance: 5,
@@ -177,10 +177,15 @@ export const generateAFrameHtml = (project: Project): string => {
         if (!url || processedAssetIds.has(id)) return '';
         processedAssetIds.add(id);
         
-        if (type === 'img') return `<img id="${id}" src="${url}" crossorigin="anonymous" />`;
-        if (type === 'video') return `<video id="${id}" src="${url}" crossorigin="anonymous" playsinline webkit-playsinline ${isVideo ? 'autoplay loop="true"' : ''}></video>`;
-        if (type === 'a-asset-item') return `<a-asset-item id="${id}" src="${url}"></a-asset-item>`;
-        if (type === 'audio') return `<audio id="${id}" src="${url}" crossorigin="anonymous"></audio>`;
+        // Use local path if available (for ZIP export), otherwise use original URL
+        // Remove content id prefix (e.g., 'asset-content_123') to check map which uses 'content_123'
+        const contentId = id.replace('asset-', '');
+        const finalUrl = localAssetMap?.get(contentId) || url;
+        
+        if (type === 'img') return `<img id="${id}" src="${finalUrl}" crossorigin="anonymous" />`;
+        if (type === 'video') return `<video id="${id}" src="${finalUrl}" crossorigin="anonymous" playsinline webkit-playsinline ${isVideo ? 'autoplay loop="true"' : ''}></video>`;
+        if (type === 'a-asset-item') return `<a-asset-item id="${id}" src="${finalUrl}"></a-asset-item>`;
+        if (type === 'audio') return `<audio id="${id}" src="${finalUrl}" crossorigin="anonymous"></audio>`;
         return '';
     };
 
@@ -282,4 +287,75 @@ export const generateAFrameHtml = (project: Project): string => {
     </a-scene>
   </body>
 </html>`;
+};
+
+// New function to generate ZIP
+export const generateProjectZip = async (project: Project, mindFileUrl: string): Promise<Blob> => {
+    const zip = new JSZip();
+    const assetsFolder = zip.folder("assets");
+    const localPathMap = new Map<string, string>(); // ContentID -> "assets/filename.ext"
+
+    // 1. Fetch and add targets.mind
+    try {
+        const mindRes = await fetch(mindFileUrl);
+        const mindBlob = await mindRes.blob();
+        zip.file("targets.mind", mindBlob);
+    } catch (e) {
+        throw new Error("Failed to fetch compiled mind file.");
+    }
+
+    // 2. Fetch and add all content assets
+    const fetchAndAddAsset = async (url: string, id: string, defaultExt: string) => {
+        try {
+            // Determine extension (naive)
+            let ext = defaultExt;
+            if (url.startsWith('data:')) {
+                 const type = url.split(';')[0].split(':')[1];
+                 if(type.includes('png')) ext = 'png';
+                 if(type.includes('jpeg')) ext = 'jpg';
+                 if(type.includes('mpeg') || type.includes('mp4')) ext = 'mp4';
+            } else {
+                 const urlParts = url.split('.');
+                 if (urlParts.length > 1) {
+                     ext = urlParts.pop() || defaultExt;
+                     // Clean extension of params if any
+                     if(ext.includes('?')) ext = ext.split('?')[0];
+                 }
+            }
+
+            const filename = `${id}.${ext}`;
+            const res = await fetch(url);
+            const blob = await res.blob();
+            
+            assetsFolder?.file(filename, blob);
+            localPathMap.set(id, `assets/${filename}`);
+        } catch (e) {
+            console.error(`Failed to download asset for content ${id}:`, e);
+        }
+    };
+
+    const assetPromises: Promise<void>[] = [];
+
+    for (const target of project.targets) {
+        for (const content of target.contents) {
+            if (content.type === ContentType.IMAGE && content.imageUrl) {
+                assetPromises.push(fetchAndAddAsset(content.imageUrl, content.id, 'png'));
+            } else if (content.type === ContentType.VIDEO && content.videoUrl && !content.streamingService) {
+                assetPromises.push(fetchAndAddAsset(content.videoUrl, content.id, 'mp4'));
+            } else if (content.type === ContentType.AUDIO && content.audioUrl) {
+                assetPromises.push(fetchAndAddAsset(content.audioUrl, content.id, 'mp3'));
+            } else if (content.type === ContentType.MODEL && content.modelUrl) {
+                assetPromises.push(fetchAndAddAsset(content.modelUrl, content.id, 'glb'));
+            }
+        }
+    }
+
+    await Promise.all(assetPromises);
+
+    // 3. Generate HTML with local paths
+    const htmlContent = generateAFrameHtml(project, localPathMap);
+    zip.file("index.html", htmlContent);
+
+    // 4. Generate ZIP blob
+    return await zip.generateAsync({ type: "blob" });
 };

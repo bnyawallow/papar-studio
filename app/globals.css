@@ -1,0 +1,186 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Background Colors */
+  --background-primary: #1e1e1e;
+  --background-secondary: #252526;
+  --background-tertiary: #2d2d2d;
+  --background-hover: #3a3a3a;
+  --background-active: #094771;
+
+  /* Accent Colors */
+  --accent-primary: #8b5cf6;
+  --accent-secondary: #14b8a6;
+  --accent-tertiary: #f59e0b;
+  --accent-success: #22c55e;
+  --accent-danger: #ef4444;
+
+  /* Text Colors */
+  --text-primary: #ffffff;
+  --text-secondary: #a1a1aa;
+  --text-tertiary: #71717a;
+
+  /* Border Colors */
+  --border-default: #3f3f46;
+  --border-subtle: #27272a;
+  --border-focus: #8b5cf6;
+
+  /* Shadows */
+  --shadow-elevation1: 0 1px 3px rgba(0,0,0,0.3);
+  --shadow-elevation2: 0 4px 12px rgba(0,0,0,0.4);
+  --shadow-elevation3: 0 8px 24px rgba(0,0,0,0.5);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background-color: var(--background-primary);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Scrollbar Styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--background-secondary);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-default);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-tertiary);
+}
+
+/* Selection */
+::selection {
+  background-color: var(--accent-primary);
+  color: var(--text-primary);
+}
+
+/* Focus ring */
+*:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+}
+
+/* Base button reset */
+button {
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  background: none;
+  padding: 0;
+}
+
+/* Input reset */
+input,
+textarea,
+select {
+  font-family: inherit;
+  font-size: inherit;
+}
+
+/* Link reset */
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* Utility Classes */
+@layer utilities {
+  .glass {
+    background: rgba(30, 30, 30, 0.8);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  .text-gradient {
+    background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .transition-base {
+    transition: all 0.2s ease-out;
+  }
+
+  .transition-smooth {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+}
+
+/* Component Classes */
+@layer components {
+  .panel {
+    @apply bg-background-secondary border border-border-default rounded-md;
+  }
+
+  .card {
+    @apply bg-background-tertiary border border-border-default rounded-lg;
+    @apply transition-all duration-200 ease-out;
+  }
+
+  .card:hover {
+    @apply -translate-y-1 shadow-elevation2 border-accent-primary;
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-sm font-medium;
+    @apply transition-all duration-150 ease-out;
+  }
+
+  .btn-primary {
+    @apply bg-accent-primary text-white hover:bg-opacity-90 active:bg-opacity-80;
+  }
+
+  .btn-secondary {
+    @apply bg-background-tertiary text-text-primary border border-border-default;
+    @apply hover:bg-background-hover active:bg-background-tertiary;
+  }
+
+  .btn-ghost {
+    @apply text-text-secondary hover:text-text-primary hover:bg-background-hover;
+  }
+
+  .btn-danger {
+    @apply bg-accent-danger text-white hover:bg-opacity-90;
+  }
+
+  .input {
+    @apply w-full px-3 py-2 bg-background-tertiary border border-border-default rounded-sm;
+    @apply text-text-primary placeholder:text-text-tertiary;
+    @apply focus:border-accent-primary focus:ring-1 focus:ring-accent-primary;
+    @apply transition-all duration-150;
+  }
+
+  .label {
+    @apply text-small text-text-secondary font-medium mb-1 block;
+  }
+
+  .section-title {
+    @apply text-h4 text-text-primary font-medium;
+  }
+
+  .divider {
+    @apply h-px bg-border-subtle my-4;
+  }
+}

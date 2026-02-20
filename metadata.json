@@ -1,0 +1,7 @@
+{
+  "name": "PapAR Studio",
+  "description": "A web-based, drag-and-drop editor for building and publishing interactive web AR apps with 3D models, videos, audios, and texts. Inspired by Pictarize Studio.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}

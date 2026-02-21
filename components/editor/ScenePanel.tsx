@@ -283,9 +283,7 @@ const EmbedContent = React.memo(({ content, onLoad, isRunning }: { content: Cont
     const height = 3;
     const aspect = 16 / 9;
     const width = height * aspect; 
-    // Calculate scale to match plane geometry: plane width (5.33) / html width (1000) ≈ 0.00533
-    // This ensures the Html component aligns with the plane geometry
-    const scale = width / DEFAULT_EMBED_WIDTH;
+    const scale = (width * 40) / DEFAULT_EMBED_WIDTH;
 
     const videoUrl = useMemo(() => {
         if (!videoId) return undefined;
@@ -409,7 +407,8 @@ const EmbedContent = React.memo(({ content, onLoad, isRunning }: { content: Cont
                                     playerVars: { 
                                         modestbranding: 1,
                                         rel: 0,
-                                        fs: videoFullScreen ? 1 : 0
+                                        fs: videoFullScreen ? 1 : 0,
+                                        origin: typeof window !== 'undefined' ? window.location.origin : ''
                                     },
                                     embedOptions: {
                                         host: 'https://www.youtube.com'

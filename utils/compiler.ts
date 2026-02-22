@@ -16,7 +16,7 @@ export const loadCompiler = async () => {
   // 2. Try dynamic import (handles ESM)
   try {
     // @ts-ignore
-    const module = await import(/* webpackIgnore: true */ COMPILER_SRC);
+    const module = await import(/* @vite-ignore */ COMPILER_SRC);
     
     if (module.Compiler) {
         compilerClass = module.Compiler;

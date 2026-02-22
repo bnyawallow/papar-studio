@@ -9,7 +9,7 @@ import * as THREE from 'three';
 import { ContentObject, ScriptAPI, ContentObjectOptions } from './ContentObject';
 
 export class TextObject extends ContentObject {
-  private textMaterial: THREE.Material | null = null;
+  private textMaterial: THREE.MeshBasicMaterial | null = null;
 
   constructor(options: ContentObjectOptions) {
     super(options);

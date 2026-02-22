@@ -66,7 +66,7 @@ export abstract class ContentObject {
     this.content = options.content;
     this.mixer = options.mixer || null;
     this.uuid = THREE.MathUtils.generateUUID();
-    this.name = content.name;
+    this.name = this.content.name;
     
     // Initialize transform from content
     this.initializeTransform();

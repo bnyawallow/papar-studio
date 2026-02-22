@@ -1,7 +1,7 @@
 
 import { Project } from '../types';
 // FIX: Use relative path instead of alias '@/'
-import { supabase } from '../lib/supabase';
+import { supabase } from '../src/services/supabase';
 import { MOCK_PROJECTS } from '../data/mockData';
 
 export const loadProjects = async (): Promise<Project[]> => {

@@ -1,21 +1,15 @@
-
-"use client";
-
 import React, { useState, useCallback, useEffect } from 'react';
-import Dashboard from '../components/dashboard/Dashboard';
-import Editor from '../components/editor/Editor';
+import { useNavigate } from 'react-router-dom';
+import DashboardComponent from '../../components/dashboard/Dashboard';
 import { Project } from '../types';
 import { MOCK_TEMPLATES } from '../data/mockData';
-import { loadProjects, saveProjects, checkCloudConnection, deleteProjectFromStorage } from '../utils/storage';
-import Toast, { ToastType } from '../components/ui/Toast';
+import { loadProjects, saveProjects, checkCloudConnection, deleteProjectFromStorage } from '../services/projectService';
+import Toast, { ToastType } from '../../components/ui/Toast';
 
-export type View = 'dashboard' | 'editor';
-
-const Page: React.FC = () => {
-  const [view, setView] = useState<View>('dashboard');
+const Dashboard: React.FC = () => {
+  const navigate = useNavigate();
   const [projects, setProjects] = useState<Project[]>([]);
   const [areProjectsLoading, setAreProjectsLoading] = useState(true);
-  const [activeProject, setActiveProject] = useState<Project | null>(null);
   const [isMounted, setIsMounted] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
 
@@ -57,17 +51,16 @@ const Page: React.FC = () => {
     const newProjects = [newProject, ...projects];
     setProjects(newProjects);
     saveProjects(newProjects);
-    setActiveProject(newProject);
-    setView('editor');
-  }, [projects]);
+    // Navigate to editor
+    navigate(`/editor/${newProject.id}`, { state: { project: newProject } });
+  }, [projects, navigate]);
 
   const handleOpenProject = useCallback((projectId: string) => {
     const projectToOpen = projects.find(p => p.id === projectId);
     if (projectToOpen) {
-      setActiveProject(projectToOpen);
-      setView('editor');
+      navigate(`/editor/${projectId}`, { state: { project: projectToOpen } });
     }
-  }, [projects]);
+  }, [projects, navigate]);
 
   const handleDeleteProject = useCallback(async (projectId: string) => {
     const previousProjects = projects;
@@ -85,49 +78,7 @@ const Page: React.FC = () => {
         setProjects(previousProjects);
         showToast("Failed to delete project.", 'error');
     }
-  }, [projects]);
-
-  const handleGoToDashboard = useCallback(() => {
-    setActiveProject(null);
-    setView('dashboard');
-    // Reload projects to ensure sync state
-    setAreProjectsLoading(true);
-    loadProjects().then(loaded => {
-        setProjects(loaded);
-        setAreProjectsLoading(false);
-    });
-  }, []);
-  
-  const handleUpdateProject = useCallback((updatedProject: Project) => {
-    setActiveProject(updatedProject);
-    setProjects(prevProjects => {
-      const newProjects = prevProjects.map(p => p.id === updatedProject.id ? updatedProject : p);
-      // Auto-save logic can still fire-and-forget, or we can handle it silently
-      saveProjects(newProjects); 
-      return newProjects;
-    });
-  }, []);
-
-  // Dedicated save handler that returns success/failure
-  const handleSaveProject = useCallback(async (project: Project): Promise<boolean> => {
-    setActiveProject(project);
-    let updatedList: Project[] = [];
-    
-    // Synchronously update state to get the full list for saving
-    setProjects(prevProjects => {
-      updatedList = prevProjects.map(p => p.id === project.id ? project : p);
-      return updatedList;
-    });
-
-    // If projects state was empty or sync failed (rare in this flow), try to construct it or fail
-    if (updatedList.length === 0) {
-        // Fallback: try to save just this project if we can't merge with list? 
-        // For now, assume list merge worked.
-        updatedList = [project]; 
-    }
-
-    return await saveProjects(updatedList);
-  }, []);
+  }, [projects, showToast]);
 
   if (!isMounted) {
     return (
@@ -138,20 +89,9 @@ const Page: React.FC = () => {
     );
   }
 
-  if (view === 'editor' && activeProject) {
-    return (
-      <Editor 
-        project={activeProject} 
-        onGoToDashboard={handleGoToDashboard} 
-        onUpdateProject={handleUpdateProject} 
-        onSaveProject={handleSaveProject}
-      />
-    );
-  }
-
   return (
     <>
-      <Dashboard
+      <DashboardComponent
         projects={projects}
         templates={MOCK_TEMPLATES}
         onCreateProject={handleCreateProject}
@@ -170,4 +110,4 @@ const Page: React.FC = () => {
   );
 };
 
-export default Page;
+export default Dashboard;

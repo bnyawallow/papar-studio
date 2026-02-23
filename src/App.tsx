@@ -12,6 +12,7 @@ function App() {
         <Route path="/" element={<Dashboard />} />
         <Route path="/editor/:id" element={<EditorPage />} />
         <Route path="/view/:id" element={<Viewer />} />
+        {/* Support both ID-based and slug-based routes for published apps */}
         <Route path="/apps/:id" element={<AppRunner />} />
       </Routes>
     </BrowserRouter>

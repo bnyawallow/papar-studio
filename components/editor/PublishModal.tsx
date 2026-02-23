@@ -3,11 +3,12 @@
 
 import React, { useState } from 'react';
 import { Project } from '../../types';
-import { XMarkIcon } from '../icons/Icons';
+import { XMarkIcon, LinkIcon, QrCodeIcon } from '../icons/Icons';
 import { compileFiles } from '../../utils/compiler';
 import { generateProjectZip } from '../../utils/exportUtils';
 import { ToastType } from '../ui/Toast';
 import { uploadFileToStorage } from '../../utils/storage';
+import { getProjectBySlug } from '../../src/services/projectService';
 import QRCode from 'qrcode';
 
 interface PublishModalProps {
@@ -33,6 +34,16 @@ const PublishModal: React.FC<PublishModalProps> = ({
   if (!isOpen) return null;
 
   const handleCompile = async () => {
+      // Check for duplicate slug before publishing
+      const projectSlug = project.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+      
+      // Check if slug is taken by another project
+      const existingProject = await getProjectBySlug(projectSlug);
+      if (existingProject && existingProject.id !== project.id) {
+        onNotify("A project with this name already exists. Please choose a different name or rename the existing project.", "error");
+        return;
+      }
+
       setIsCompiling(true);
       setProgress(0);
       try {
@@ -70,15 +81,18 @@ const PublishModal: React.FC<PublishModalProps> = ({
           const updatedTargets = [...project.targets];
           updatedTargets[0] = { ...updatedTargets[0], mindFileUrl: uploadedUrl };
           
+          // Generate and store the slug for title-based publishing
+          // Note: projectSlug already computed above for validation
+          
           onUpdateProject({
               ...project,
               targets: updatedTargets,
-              status: 'Published'
+              status: 'Published',
+              publishedSlug: projectSlug
           });
 
-          // Generate Viewer Link
-          // Point to the Next.js API route that serves the raw HTML
-          const viewerUrl = `${window.location.origin}/apps/${project.id}`;
+          // Generate Viewer Link using project name for cleaner URLs
+          const viewerUrl = `${window.location.origin}/apps/${projectSlug}`;
           setPublishUrl(viewerUrl);
 
           // Generate QR Code
@@ -98,27 +112,54 @@ const PublishModal: React.FC<PublishModalProps> = ({
       }
   };
 
+  // Helper to generate slug from project name
+  const generateSlug = (name: string): string => {
+    return name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+  };
+
+  // Handle download of QR code as image
+  const handleDownloadQR = () => {
+    if (!qrCodeUrl) return;
+    
+    const link = document.createElement('a');
+    link.download = `${project.name.replace(/\s+/g, '_')}_qrcode.png`;
+    link.href = qrCodeUrl;
+    link.click();
+  };
+
+  // Handle copying link to clipboard
+  const handleCopyLink = () => {
+    if (!publishUrl) return;
+    navigator.clipboard.writeText(publishUrl).then(() => {
+      onNotify('Link copied to clipboard!', 'success');
+    }).catch(() => {
+      onNotify('Failed to copy link', 'error');
+    });
+  };
+
+  // Handle download of ZIP file for the published web app
   const handleDownloadZip = async () => {
-      const mindFileUrl = project.targets[0]?.mindFileUrl;
-      if (!mindFileUrl) {
-          onNotify("Please compile the project first.", 'error');
-          return;
-      }
-      
-      try {
-        const blob = await generateProjectZip(project, mindFileUrl);
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${project.name.replace(/\s+/g, '_')}.zip`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-      } catch(e) {
-          console.error(e);
-          onNotify("Failed to generate ZIP.", 'error');
-      }
+    const mindFileUrl = project.targets[0]?.mindFileUrl;
+    if (!mindFileUrl) {
+      onNotify("Please compile the project first.", 'error');
+      return;
+    }
+    
+    try {
+      const blob = await generateProjectZip(project, mindFileUrl);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${project.name.replace(/\s+/g, '_')}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      onNotify("ZIP downloaded successfully!", 'success');
+    } catch(e) {
+      console.error(e);
+      onNotify("Failed to generate ZIP.", 'error');
+    }
   };
 
   return (
@@ -158,14 +199,23 @@ const PublishModal: React.FC<PublishModalProps> = ({
                                 <p className="text-xs text-gray-500 font-bold uppercase mb-1">Public App Link</p>
                                 <div className="flex gap-2">
                                     <input id="publish-url" name="publish-url" readOnly value={publishUrl} className="flex-1 bg-gray-100 border px-2 py-1 text-sm rounded text-gray-700 select-all" />
+                                    <button onClick={handleCopyLink} className="px-3 py-1 bg-gray-100 text-gray-700 rounded text-sm font-medium hover:bg-gray-200 flex items-center gap-1">
+                                        <LinkIcon className="w-4 h-4" /> Copy
+                                    </button>
                                     <button onClick={() => window.open(publishUrl, '_blank')} className="px-3 py-1 bg-blue-100 text-blue-700 rounded text-sm font-medium hover:bg-blue-200">Open</button>
                                 </div>
                             </div>
                             
                             {qrCodeUrl && (
                                 <div className="flex flex-col items-center justify-center p-4 border rounded bg-gray-50">
-                                    <img src={qrCodeUrl} alt="QR Code" className="w-40 h-40 border bg-white" />
-                                    <p className="text-xs text-gray-500 mt-2">Scan to preview on mobile</p>
+                                    <img src={qrCodeUrl} alt="QR Code" className="w-48 h-48 border-2 border-white bg-white" />
+                                    <p className="text-xs text-gray-500 mt-3">Scan to preview on mobile</p>
+                                    <button 
+                                        onClick={handleDownloadQR}
+                                        className="mt-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors text-sm font-medium flex items-center gap-2"
+                                    >
+                                        <QrCodeIcon className="w-4 h-4" /> Download QR Code
+                                    </button>
                                 </div>
                             )}
                         </div>

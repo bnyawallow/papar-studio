@@ -77,6 +77,7 @@ export const getProjectById = async (id: string): Promise<Project | null> => {
         ...data.data,
         id: data.id,
         name: data.name,
+        publishedSlug: data.published_slug,
         lastUpdated: new Date(data.last_updated).toLocaleString(),
         status: data.status
       };
@@ -85,6 +86,111 @@ export const getProjectById = async (id: string): Promise<Project | null> => {
     console.error("Failed to load project:", e);
   }
   return null;
+};
+
+// Generate slug from project name
+const generateSlug = (name: string): string => {
+  return name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+};
+
+// Get project by slug (for published apps accessed via /apps/project-name)
+export const getProjectBySlug = async (slug: string): Promise<Project | null> => {
+  if (!supabase) {
+    // Try localStorage
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored) {
+      try {
+        const projects: Project[] = JSON.parse(stored);
+        // Find project with matching slug (either generated from name or stored publishedSlug)
+        const found = projects.find(p => 
+          generateSlug(p.name) === slug || 
+          ((p as any).publishedSlug && (p as any).publishedSlug === slug)
+        );
+        return found || null;
+      } catch (e) {
+        console.error("Failed to parse stored projects", e);
+      }
+    }
+    // Check mock projects
+    return MOCK_PROJECTS.find(p => generateSlug(p.name) === slug) || null;
+  }
+
+  try {
+    // Query directly by published_slug for efficiency
+    const { data, error } = await supabase
+      .from('projects')
+      .select('*')
+      .eq('status', 'Published')
+      .or('published_slug.eq.' + slug + ',name.ilike.' + slug)
+      .limit(1);
+
+    if (error) throw error;
+    
+    if (data && data.length > 0) {
+      const found = data[0];
+      // Check if slug matches either published_slug or generated name slug
+      if (found.published_slug === slug || generateSlug(found.name) === slug) {
+        return {
+          ...found.data,
+          id: found.id,
+          name: found.name,
+          publishedSlug: found.published_slug,
+          lastUpdated: new Date(found.last_updated).toLocaleString(),
+          status: found.status
+        };
+      }
+    }
+  } catch (e) {
+    console.error("Failed to load project by slug:", e);
+  }
+  return null;
+};
+
+// Check if a project name already exists (for duplicate prevention)
+export const checkProjectNameExists = async (name: string, excludeId?: string): Promise<boolean> => {
+  const slug = name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+  
+  if (!supabase) {
+    // Check localStorage
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored) {
+      try {
+        const projects: Project[] = JSON.parse(stored);
+        return projects.some(p => 
+          (p.name.toLowerCase() === name.toLowerCase() || 
+           generateSlug(p.name) === slug) && 
+          p.id !== excludeId
+        );
+      } catch (e) {
+        console.error("Failed to parse stored projects", e);
+      }
+    }
+    // Check mock projects
+    return MOCK_PROJECTS.some(p => 
+      p.name.toLowerCase() === name.toLowerCase() && 
+      p.id !== excludeId
+    );
+  }
+
+  try {
+    // Check Supabase - compare both name and slug
+    const { data, error } = await supabase
+      .from('projects')
+      .select('id, name, published_slug')
+      .or(`name.ilike.${name},published_slug.eq.${slug}`)
+      .neq('id', excludeId || '')
+      .limit(1);
+
+    if (error) {
+      console.warn('Error checking project name:', error);
+      return false;
+    }
+
+    return !!data && data.length > 0;
+  } catch (e) {
+    console.warn('Error checking project name:', e);
+    return false;
+  }
 };
 
 export const saveProjects = async (projects: Project[]): Promise<boolean> => {
@@ -102,6 +208,7 @@ export const saveProjects = async (projects: Project[]): Promise<boolean> => {
   const payload = projects.map(p => ({
     id: p.id,
     name: p.name,
+    published_slug: (p as any).publishedSlug || null,
     last_updated: new Date().toISOString(),
     status: p.status,
     data: p

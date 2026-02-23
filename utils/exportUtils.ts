@@ -18,10 +18,280 @@ export const generateProjectJson = (project: Project, masterMindFileUrl: string 
 };
 
 /**
+ * Generates a structured JSON for AR apps (instead of HTML).
+ * This allows native AR apps to consume the project data.
+ */
+export const generateARJson = (
+  project: Project,
+  localAssetMap?: Map<string, string>,
+  mindFileUrls?: string[]
+): object => {
+  const config = project.mindARConfig || {
+    maxTrack: 1,
+    warmupTolerance: 5,
+    missTolerance: 5,
+    filterMinCF: 0.0001,
+    filterBeta: 0.001
+  };
+
+  // Deep copy project to prepare for export
+  const exportProject = JSON.parse(JSON.stringify(project)) as Project;
+
+  // Map assets to local paths if provided
+  if (localAssetMap) {
+    exportProject.targets.forEach(target => {
+      target.contents.forEach(content => {
+        const localPath = localAssetMap.get(content.id);
+        if (localPath) {
+          if (content.type === ContentType.IMAGE) content.imageUrl = localPath;
+          if (content.type === ContentType.VIDEO) content.videoUrl = localPath;
+          if (content.type === ContentType.AUDIO) content.audioUrl = localPath;
+          if (content.type === ContentType.MODEL) content.modelUrl = localPath;
+        }
+      });
+    });
+  }
+
+  // Convert targets to AR-friendly format
+  const arTargets = exportProject.targets.map((target, index) => {
+    const targetJson: any = {
+      id: target.id,
+      name: target.name,
+      imageUrl: `targets/target_${index}.jpg`,
+      trackingFile: `targets/target_${index}.mind`,
+      contents: target.contents.map(content => ({
+        id: content.id,
+        name: content.name,
+        type: content.type,
+        transform: content.transform,
+        url: getContentUrl(content),
+        visible: content.visible ?? true,
+        alwaysFacingUser: content.alwaysFacingUser ?? false,
+        // Type-specific properties
+        ...getContentProperties(content)
+      })),
+      visible: target.visible ?? true
+    };
+
+    // Add script if present
+    if (target.script) {
+      targetJson.script = `scripts/target_${index}.json`;
+    }
+
+    return targetJson;
+  });
+
+  return {
+    version: "1.0",
+    id: project.id,
+    name: project.name,
+    created: project.lastUpdated,
+    updated: new Date().toISOString(),
+    config: {
+      trackingType: "image",
+      maxTrack: config.maxTrack,
+      warmupTolerance: config.warmupTolerance,
+      missTolerance: config.missTolerance
+    },
+    targets: arTargets
+  };
+};
+
+/**
+ * Helper to get the URL for a content item
+ */
+function getContentUrl(content: Content): string {
+  switch (content.type) {
+    case ContentType.IMAGE:
+      return content.imageUrl || '';
+    case ContentType.VIDEO:
+      return content.videoUrl || '';
+    case ContentType.AUDIO:
+      return content.audioUrl || '';
+    case ContentType.MODEL:
+      return content.modelUrl || '';
+    default:
+      return '';
+  }
+}
+
+/**
+ * Helper to get type-specific properties for a content item
+ */
+function getContentProperties(content: Content): object {
+  switch (content.type) {
+    case ContentType.VIDEO:
+      return {
+        autoplay: content.autoplay ?? false,
+        loop: content.loop ?? true,
+        muted: content.muted ?? true,
+        videoClickToggle: content.videoClickToggle ?? false,
+        videoControls: content.videoControls ?? false,
+        chromaKey: content.chromaKey ?? false,
+        chromaColor: content.chromaColor
+      };
+    case ContentType.AUDIO:
+      return {
+        autoplay: content.autoplay ?? false,
+        loop: content.loop ?? true
+      };
+    case ContentType.MODEL:
+      return {
+        animateAutostart: content.animateAutostart ?? true,
+        animateLoop: content.animateLoop ?? 'repeat',
+        materialOverrides: content.materialOverrides
+      };
+    case ContentType.TEXT:
+      return {
+        color: content.color,
+        font: content.font,
+        size: content.size,
+        textContent: content.textContent,
+        align: content.align
+      };
+    default:
+      return {};
+  }
+}
+
+/**
+ * Converts JavaScript script to JSON action format for AR apps
+ * Improved parser that handles comments, multi-line scripts, and various formats
+ */
+export const generateScriptJson = (script: string | undefined): object => {
+  if (!script) {
+    return {};
+  }
+
+  // Default action structure
+  const actions: Record<string, any[]> = {
+    onInit: [],
+    onActivate: [],
+    onDeactivate: [],
+    onUpdate: [],
+    onClick: []
+  };
+
+  // Track parsing warnings
+  const warnings: string[] = [];
+
+  // Normalize script - remove comments and extra whitespace
+  let normalized = script
+    .replace(/\/\/.*$/gm, '')  // Remove single-line comments
+    .replace(/\/\*[\s\S]*?\*\//g, '')  // Remove multi-line comments
+    .replace(/`[^`]*`/g, (match) => '"'.repeat(match.length))  // Replace template literals
+    .replace(/\n+/g, '\n')  // Normalize newlines
+    .trim();
+
+  if (!normalized) {
+    return {};
+  }
+
+  // Try to parse the script and extract action calls
+  try {
+    // Define action patterns with their corresponding handler
+    const actionPatterns = [
+      { 
+        pattern: /play\s*\(\s*['"`]([^'"`]+)['"`]\s*\)/g, 
+        action: 'play',
+        handlers: ['onInit', 'onActivate']
+      },
+      { 
+        pattern: /pause\s*\(\s*['"`]([^'"`]+)['"`]\s*\)/g, 
+        action: 'pause',
+        handlers: ['onDeactivate']
+      },
+      { 
+        pattern: /stop\s*\(\s*['"`]([^'"`]+)['"`]\s*\)/g, 
+        action: 'stop',
+        handlers: ['onDeactivate']
+      },
+      { 
+        pattern: /show\s*\(\s*['"`]([^'"`]+)['"`]\s*\)/g, 
+        action: 'show',
+        handlers: ['onActivate']
+      },
+      { 
+        pattern: /hide\s*\(\s*['"`]([^'"`]+)['"`]\s*\)/g, 
+        action: 'hide',
+        handlers: ['onDeactivate']
+      },
+      { 
+        pattern: /openUrl\s*\(\s*['"`]([^'"`]+)['"`]\s*\)/g, 
+        action: 'openUrl',
+        handlers: ['onClick']
+      }
+    ];
+
+    for (const { pattern, action, handlers } of actionPatterns) {
+      let match;
+      pattern.lastIndex = 0;
+      while ((match = pattern.exec(normalized)) !== null) {
+        const targetName = match[1];
+        if (!targetName || targetName.trim() === '') {
+          warnings.push(`Found ${action}() call with empty target`);
+          continue;
+        }
+        
+        for (const handler of handlers) {
+          if (action === 'openUrl') {
+            actions[handler].push({ action, url: targetName });
+          } else {
+            actions[handler].push({ action, target: targetName });
+          }
+        }
+      }
+    }
+
+    // Extract transform operations
+    const transformPatterns = [
+      { pattern: /setPosition\s*\(\s*([^)]+)\s*\)/g, action: 'setPosition' },
+      { pattern: /setRotation\s*\(\s*([^)]+)\s*\)/g, action: 'setRotation' },
+      { pattern: /setScale\s*\(\s*([^)]+)\s*\)/g, action: 'setScale' }
+    ];
+
+    for (const { pattern, action } of transformPatterns) {
+      let match;
+      pattern.lastIndex = 0;
+      while ((match = pattern.exec(normalized)) !== null) {
+        const argsStr = match[1];
+        const args = argsStr.split(',').map((s: string) => {
+          const trimmed = s.trim();
+          const num = parseFloat(trimmed);
+          return isNaN(num) ? trimmed : num;
+        });
+        actions.onInit.push({ action, target: 'self', values: args });
+      }
+    }
+
+    // Log warnings for debugging
+    if (warnings.length > 0) {
+      console.warn('Script parsing warnings:', warnings);
+    }
+
+  } catch (e) {
+    console.warn('Could not parse script, returning empty actions:', e);
+  }
+
+  // Remove empty arrays
+  Object.keys(actions).forEach(key => {
+    if (actions[key].length === 0) {
+      delete actions[key];
+    }
+  });
+
+  return actions;
+};
+
+/**
  * Generates a standalone HTML file using MindAR + Three.js + CSS3DRenderer
  * Includes a Player architecture similar to the refcode for scripting and asset management.
+ * @param project - The project to export
+ * @param localAssetMap - Optional map of local asset paths
+ * @param mindFileUrl - URL to the compiled mind file
+ * @param enableDebug - Whether to enable debug overlay in the published app
  */
-export const generateAFrameHtml = (project: Project, localAssetMap?: Map<string, string>, mindFileUrl: string = './targets.mind'): string => {
+export const generateAFrameHtml = (project: Project, localAssetMap?: Map<string, string>, mindFileUrl: string = './targets.mind', enableDebug: boolean = false): string => {
     const config = project.mindARConfig || {
         maxTrack: 1,
         warmupTolerance: 5,
@@ -62,23 +332,35 @@ export const generateAFrameHtml = (project: Project, localAssetMap?: Map<string,
     #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; }
     #start-screen {
         position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-        background: rgba(0,0,0,0.8);
+        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
         display: flex; flex-direction: column; justify-content: center; align-items: center;
         pointer-events: auto; z-index: 999;
         transition: opacity 0.5s;
     }
     #start-btn {
-        padding: 15px 30px; font-size: 18px; font-weight: bold;
-        background: #2563eb; color: white; border: none; border-radius: 8px;
-        cursor: pointer;
+        padding: 18px 40px; font-size: 20px; font-weight: bold;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 50px;
+        cursor: pointer; box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+        transition: transform 0.2s, box-shadow 0.2s;
     }
-    #loading-status { color: white; margin-top: 10px; font-size: 14px; }
+    #start-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 15px 40px rgba(102, 126, 234, 0.5);
+    }
+    #start-btn:disabled {
+        background: #666; cursor: not-allowed; transform: none;
+    }
+    #loading-status { color: #aaa; margin-top: 15px; font-size: 14px; }
     .hidden { opacity: 0 !important; pointer-events: none !important; }
     
     /* CSS3D Renderer Container */
     #css-container {
         position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 2;
     }
+    
+    /* MindAR UI Overrides - Show scanner overlay */
+    .mindar-ui-loading { display: flex !important; }
+    .mindar-ui-scanning { display: flex !important; }
   </style>
   
   <script type="importmap">
@@ -97,8 +379,9 @@ export const generateAFrameHtml = (project: Project, localAssetMap?: Map<string,
   
   <div id="ui-layer">
       <div id="start-screen">
+          <h1 style="color: white; font-size: 28px; margin-bottom: 30px;">${project.name}</h1>
           <button id="start-btn">Start Experience</button>
-          <div id="loading-status">Ready</div>
+          <div id="loading-status">Tap to begin</div>
       </div>
   </div>
 
@@ -107,6 +390,16 @@ export const generateAFrameHtml = (project: Project, localAssetMap?: Map<string,
     import { MindARThree } from 'mindar-image-three';
     import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
     import { CSS3DRenderer, CSS3DObject } from 'three/addons/renderers/CSS3DRenderer.js';
+
+    // --- Debug Helper ---
+    const debugLog = (message, data) => {
+        const timestamp = new Date().toLocaleTimeString();
+        console.log('[AR Debug ' + timestamp + ']', message, data || '');
+        // Send to parent for debug overlay
+        if (window.parent !== window) {
+            window.parent.postMessage({ type: 'debug', message, data }, '*');
+        }
+    };
 
     // --- Polyfills ---
     if (!THREE.WebGLRenderer.prototype.hasOwnProperty('outputEncoding')) {
@@ -412,6 +705,9 @@ export const generateAFrameHtml = (project: Project, localAssetMap?: Map<string,
         async init() {
             startBtn.innerText = "Initializing...";
             startBtn.disabled = true;
+            loadingStatus.innerText = "Loading MindAR library...";
+            
+            debugLog('mindarLoading', { progress: 10 });
 
             this.mindarThree = new MindARThree({
                 container: this.container,
@@ -425,6 +721,8 @@ export const generateAFrameHtml = (project: Project, localAssetMap?: Map<string,
                 uiScanning: "yes",
                 uiError: "yes"
             });
+
+            debugLog('mindarLoaded', {});
 
             this.renderer = this.mindarThree.renderer;
             this.scene = this.mindarThree.scene;
@@ -492,10 +790,12 @@ export const generateAFrameHtml = (project: Project, localAssetMap?: Map<string,
                 
                 // Events
                 anchor.onTargetFound = () => {
+                    debugLog('targetFound', { targetIndex: index });
                     targetObj.objects.forEach(o => o.activate());
                     this.dispatch(targetObj, 'onActivate');
                 };
                 anchor.onTargetLost = () => {
+                    debugLog('targetLost', { targetIndex: index });
                     targetObj.objects.forEach(o => o.deactivate());
                     this.dispatch(targetObj, 'onDeactivate');
                 };
@@ -514,6 +814,8 @@ export const generateAFrameHtml = (project: Project, localAssetMap?: Map<string,
             // UI
             loadingStatus.innerText = "Loaded!";
             startScreen.classList.add('hidden');
+            
+            debugLog('cameraReady', {});
             
             // Trigger Init
             this.targets.forEach(t => this.dispatch(t, 'onInit'));
@@ -617,19 +919,41 @@ export const generateAFrameHtml = (project: Project, localAssetMap?: Map<string,
     `;
 };
 
-// New function to generate ZIP
-export const generateProjectZip = async (project: Project, mindFileUrl: string, signal?: AbortSignal): Promise<Blob> => {
+// Export type for ZIP generation
+export type ExportType = 'web' | 'ar';
+
+/**
+ * Generates a ZIP file for the project.
+ * @param project - The project to export
+ * @param mindFileUrl - URL to the compiled mind file
+ * @param signal - Optional abort signal
+ * @param exportType - 'web' for browser-based HTML, 'ar' for AR app JSON format
+ */
+export const generateProjectZip = async (
+    project: Project, 
+    mindFileUrl: string, 
+    signal?: AbortSignal,
+    exportType: ExportType = 'web'
+): Promise<Blob> => {
     if (signal?.aborted) throw new Error("Aborted");
 
     const zip = new JSZip();
     const assetsFolder = zip.folder("assets");
+    const targetsFolder = zip.folder("targets");
     const localPathMap = new Map<string, string>(); // ContentID -> "assets/filename.ext"
 
     // 1. Fetch and add targets.mind
     try {
         const mindRes = await fetch(mindFileUrl, { signal });
         const mindBlob = await mindRes.blob();
-        zip.file("targets.mind", mindBlob);
+        
+        if (exportType === 'ar') {
+            // AR export: Add individual target files
+            targetsFolder?.file("target_0.mind", mindBlob);
+        } else {
+            // Web export: Single targets.mind file
+            zip.file("targets.mind", mindBlob);
+        }
     } catch (e) {
         if (signal?.aborted) throw new Error("Aborted");
         throw new Error("Failed to fetch compiled mind file.");
@@ -687,10 +1011,45 @@ export const generateProjectZip = async (project: Project, mindFileUrl: string, 
     await Promise.all(assetPromises);
     if (signal?.aborted) throw new Error("Aborted");
 
-    // 3. Generate HTML with local paths
-    // Note: We use the local path 'targets.mind' for the zip file reference
-    const htmlContent = generateAFrameHtml(project, localPathMap, './targets.mind');
-    zip.file("index.html", htmlContent);
+    // 3. Generate content based on export type
+    if (exportType === 'ar') {
+        // AR Export: Generate JSON + scripts
+        const arJson = generateARJson(project, localPathMap);
+        zip.file("project.json", JSON.stringify(arJson, null, 2));
+        
+        // Add scripts for each target
+        const scriptsFolder = zip.folder("scripts");
+        project.targets.forEach((target, index) => {
+            if (target.script) {
+                const scriptJson = generateScriptJson(target.script);
+                scriptsFolder?.file(`target_${index}.json`, JSON.stringify(scriptJson, null, 2));
+            }
+        });
+        
+        // Add target images
+        const targetImagePromises: Promise<void>[] = [];
+        project.targets.forEach((target, index) => {
+            if (target.imageUrl) {
+                targetImagePromises.push(
+                    (async () => {
+                        try {
+                            const res = await fetch(target.imageUrl, { signal });
+                            const blob = await res.blob();
+                            targetsFolder?.file(`target_${index}.jpg`, blob);
+                        } catch (e) {
+                            console.error(`Failed to fetch target image:`, e);
+                        }
+                    })()
+                );
+            }
+        });
+        await Promise.all(targetImagePromises);
+    } else {
+        // Web Export: Generate HTML with local paths
+        // Note: We use the local path 'targets.mind' for the zip file reference
+        const htmlContent = generateAFrameHtml(project, localPathMap, './targets.mind');
+        zip.file("index.html", htmlContent);
+    }
 
     // 4. Generate ZIP blob
     return await zip.generateAsync({ type: "blob" });

@@ -19,6 +19,7 @@ import { compileFiles } from '../../utils/compiler';
 import { generateProjectJson, generateProjectZip } from '../../utils/exportUtils';
 import { useDebounce } from '../../hooks/useDebounce';
 import { equal } from '@wry/equality';
+import { getProjectBySlug } from '../../services/projectService';
 
 interface EditorProps {
   project: Project;
@@ -71,6 +72,7 @@ const Editor: React.FC<EditorProps> = ({
   });
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const nameCheckAbortRef = useRef<AbortController | null>(null);
 
   const showToast = useCallback((message: string, type: ToastType = 'info') => {
     setToast({ message, type, isVisible: true });
@@ -121,8 +123,46 @@ const Editor: React.FC<EditorProps> = ({
       }
   }, [debouncedProject]);
 
-  const handleProjectNameChange = (name: string) => {
-    setProject(prev => ({ ...prev, name }));
+  const handleProjectNameChange = async (name: string) => {
+    const newSlug = name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+    
+    // Cancel any pending name check
+    if (nameCheckAbortRef.current) {
+      nameCheckAbortRef.current.abort();
+    }
+    nameCheckAbortRef.current = new AbortController();
+    
+    // Only check for duplicates if project is published
+    if (project.status === 'Published') {
+      // Check if slug is taken by another project
+      try {
+        const existingProject = await getProjectBySlug(newSlug);
+        if (existingProject && existingProject.id !== project.id) {
+          showToast("A project with this name already exists. Please choose a different name.", 'error');
+          return;
+        }
+      } catch (e) {
+        // Ignore abort errors
+        if ((e as Error).name !== 'AbortError') {
+          console.error('Error checking project name:', e);
+        }
+      }
+    }
+    
+    // Check if project was previously published with a different slug
+    const oldSlug = project.publishedSlug;
+    
+    // If project was published and slug changed, show notification
+    if (project.status === 'Published' && oldSlug && oldSlug !== newSlug) {
+      showToast(`Title changed. Published URL updated from /apps/${oldSlug} to /apps/${newSlug}`, 'info');
+    }
+    
+    setProject(prev => ({ 
+      ...prev, 
+      name,
+      // Update published slug when title changes for published projects
+      publishedSlug: project.status === 'Published' ? newSlug : prev.publishedSlug
+    }));
   };
 
   const handleAddTarget = useCallback(() => {

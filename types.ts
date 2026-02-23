@@ -107,6 +107,7 @@ export interface Project {
   lastUpdated: string;
   status: 'Draft' | 'Published';
   sizeMB: number;
+  publishedSlug?: string; // Store the slug used when published for URL consistency
 }
 
 export interface Template {

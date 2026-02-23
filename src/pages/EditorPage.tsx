@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import EditorComponent from '../../components/editor/Editor';
-import { Project } from '../types';
+import { Project } from '@/types';
 import { loadProjects, getProjectById, saveProjects } from '../services/projectService';
 
 const EditorPage: React.FC = () => {

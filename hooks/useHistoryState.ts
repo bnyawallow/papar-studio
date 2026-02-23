@@ -2,6 +2,9 @@
 import { useState, useCallback } from 'react';
 import { equal } from '@wry/equality';
 
+// Maximum number of history states to keep to prevent memory leaks
+const MAX_HISTORY_SIZE = 50;
+
 type HistoryState<T> = {
   past: T[];
   present: T;
@@ -34,8 +37,15 @@ export const useHistoryState = <T>(initialPresent: T): [
       if (equal(resolvedPresent, currentState.present)) {
         return currentState;
       }
+      
+      // Limit history size to prevent memory leaks
+      const newPast = [...currentState.past, currentState.present];
+      if (newPast.length > MAX_HISTORY_SIZE) {
+        newPast.shift(); // Remove oldest entry
+      }
+      
       return {
-        past: [...currentState.past, currentState.present],
+        past: newPast,
         present: resolvedPresent,
         future: [],
       };

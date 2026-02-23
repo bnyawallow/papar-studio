@@ -1,8 +1,8 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import DashboardComponent from '../../components/dashboard/Dashboard';
-import { Project } from '../types';
-import { MOCK_TEMPLATES } from '../data/mockData';
+import { Project } from '@/types';
+import { MOCK_TEMPLATES } from '@/data/mockData';
 import { loadProjects, saveProjects, checkCloudConnection, deleteProjectFromStorage } from '../services/projectService';
 import Toast, { ToastType } from '../../components/ui/Toast';
 

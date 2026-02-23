@@ -19,7 +19,7 @@ import { compileFiles } from '../../utils/compiler';
 import { generateProjectJson, generateProjectZip } from '../../utils/exportUtils';
 import { useDebounce } from '../../hooks/useDebounce';
 import { equal } from '@wry/equality';
-import { getProjectBySlug } from '../../services/projectService';
+import { getProjectBySlug } from '../../src/services/projectService';
 
 interface EditorProps {
   project: Project;

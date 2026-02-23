@@ -1,7 +1,7 @@
 
-import { Project } from '../types';
+import { Project } from '@/types';
 import { supabase } from './supabase';
-import { MOCK_PROJECTS } from '../../data/mockData';
+import { MOCK_PROJECTS } from '@/data/mockData';
 
 const STORAGE_KEY = 'papar_projects';
 

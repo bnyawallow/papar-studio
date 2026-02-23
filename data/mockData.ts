@@ -1,5 +1,5 @@
 
-import { Project, Template, ContentType, Target } from '../types';
+import { Project, Template, ContentType, Target } from '@/types';
 
 const demoScript = `
 // Demo Script for Business Card

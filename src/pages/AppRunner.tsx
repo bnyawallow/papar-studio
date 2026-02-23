@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { getProjectById, getProjectBySlug } from '../services/projectService';
-import { Project } from '../types';
+import { Project } from '@/types';
 import { generateAFrameHtml } from '../../utils/exportUtils';
 
 interface DebugState {

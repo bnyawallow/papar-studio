@@ -1,5 +1,5 @@
 
-import { Project, Target, Content, ContentType } from '../types';
+import { Project, Target, Content, ContentType } from '@/types';
 import JSZip from 'jszip';
 
 export const generateProjectJson = (project: Project, masterMindFileUrl: string | null = null) => {

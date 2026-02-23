@@ -2,10 +2,29 @@
 import { createClient } from '@supabase/supabase-js';
 
 // Vite uses import.meta.env instead of process.env
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "https://cdrhnsfllxpqpuotzotq.supabase.co";
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNkcmhuc2ZsbHhwcXB1b3R6b3RxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjIyMDQ3OTEsImV4cCI6MjA3Nzc4MDc5MX0.Pbxi609hE7MM8u1j_gBKwIV1xq7PJkatTIJfVEjpSNM";
+// Ensure these environment variables are set in your .env file:
+// VITE_SUPABASE_URL=your_supabase_url
+// VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-console.log(`[Supabase] Initializing client with URL: ${supabaseUrl}`);
+// Track Supabase connection status for UI feedback
+export let isSupabaseConfigured = false;
+export let supabaseConfigError: string | null = null;
+
+if (!supabaseUrl || !supabaseAnonKey) {
+  supabaseConfigError = "Supabase credentials not configured. App will run in offline/local mode.";
+  console.error("[Supabase] " + supabaseConfigError);
+  
+  // Dispatch custom event so UI can show notification
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('supabase-config-error', { 
+      detail: { message: supabaseConfigError } 
+    }));
+  }
+} else {
+  isSupabaseConfigured = true;
+}
 
 export const supabase = (supabaseUrl && supabaseAnonKey)
   ? createClient(supabaseUrl, supabaseAnonKey)

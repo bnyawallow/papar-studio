@@ -56,9 +56,16 @@ const PublishModal: React.FC<PublishModalProps> = ({
           // Note: compileFiles expects File objects. We need to convert URLs/Base64 to Files.
           const files: File[] = [];
           for (let i = 0; i < targets.length; i++) {
-              const res = await fetch(targets[i].imageUrl);
-              const blob = await res.blob();
-              files.push(new File([blob], `target_${i}.jpg`, { type: 'image/jpeg' }));
+              try {
+                const res = await fetch(targets[i].imageUrl);
+                if (!res.ok) {
+                  throw new Error(`Failed to fetch image: ${res.status} ${res.statusText}`);
+                }
+                const blob = await res.blob();
+                files.push(new File([blob], `target_${i}.jpg`, { type: 'image/jpeg' }));
+              } catch (fetchError) {
+                throw new Error(`Failed to load target image: ${targets[i].name}. Ensure the image URL allows CORS access.`);
+              }
           }
 
           // Compile

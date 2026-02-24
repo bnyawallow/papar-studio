@@ -70,7 +70,13 @@ export const getProjectById = async (id: string): Promise<Project | null> => {
       .eq('id', id)
       .single();
 
-    if (error) throw error;
+    // Don't throw on PGRST116 (no rows) - return null instead so fallback to slug works
+    if (error) {
+      if (error.code === 'PGRST116') {
+        return null;
+      }
+      throw error;
+    }
     
     if (data) {
       return {

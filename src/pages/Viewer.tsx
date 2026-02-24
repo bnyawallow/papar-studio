@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { getProjectById } from '../services/projectService';
-import { Project } from '@/types';
+import { Project } from '../../types';
 import ScenePanel from '../../components/editor/ScenePanel';
 
 const Viewer: React.FC = () => {

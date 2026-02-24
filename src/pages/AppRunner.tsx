@@ -13,6 +13,10 @@ interface DebugState {
   lastEvent: string;
   fps: number;
   loadingProgress: number;
+  debugLog: { time: string; level: string; category: string; message: string }[];
+  webglStatus: string;
+  mindFileStatus: string;
+  browserCapabilities: string[];
 }
 
 const AppRunner: React.FC = () => {
@@ -31,7 +35,11 @@ const AppRunner: React.FC = () => {
     targetsFound: [],
     lastEvent: 'Initializing...',
     fps: 0,
-    loadingProgress: 0
+    loadingProgress: 0,
+    debugLog: [],
+    webglStatus: 'Unknown',
+    mindFileStatus: 'Pending',
+    browserCapabilities: [],
   });
   
   const debugRef = useRef<HTMLIFrameElement>(null);
@@ -161,6 +169,47 @@ const AppRunner: React.FC = () => {
       if (event.data && event.data.type === 'debug') {
         updateDebugState(event.data.message, event.data.data);
       }
+      // Handle new mindar-debug messages
+      if (event.data && event.data.type === 'mindar-debug') {
+        setDebugState(prev => {
+          const newLog = {
+            time: `[+${event.data.elapsed}ms]`,
+            level: event.data.level,
+            category: event.data.category,
+            message: event.data.message,
+          };
+          const updatedLog = [...prev.debugLog, newLog].slice(-50); // Keep last 50 entries
+          
+          // Update status based on debug messages
+          const newState = { ...prev, debugLog: updatedLog };
+          
+          if (event.data.category === 'WEBGL') {
+            newState.webglStatus = event.data.level === 'ERROR' ? 'Failed' : 'OK';
+          }
+          if (event.data.category === 'MIND') {
+            if (event.data.message.includes('loaded')) {
+              newState.mindFileStatus = 'Loaded';
+            } else if (event.data.level === 'ERROR') {
+              newState.mindFileStatus = 'Failed';
+            }
+          }
+          if (event.data.category === 'CHECK') {
+            if (event.data.message.includes('supported')) {
+              newState.browserCapabilities = [...prev.browserCapabilities, event.data.message];
+            }
+          }
+          if (event.data.message.includes('complete') || event.data.message.includes('Ready')) {
+            newState.cameraReady = true;
+            newState.mindarLoading = false;
+          }
+          if (event.data.level === 'ERROR') {
+            newState.mindarError = event.data.message;
+            newState.mindarLoading = false;
+          }
+          
+          return newState;
+        });
+      }
     };
 
     window.addEventListener('message', handleMessage);
@@ -224,9 +273,15 @@ const AppRunner: React.FC = () => {
       
       {/* Debug Overlay */}
       {showDebug && (
-        <div className="absolute top-16 right-4 z-50 w-72 bg-black bg-opacity-85 text-green-400 text-xs font-mono p-3 rounded-lg border border-green-600">
-          <div className="border-b border-green-600 pb-2 mb-2 font-bold text-green-300">
-            MindAR Debug
+        <div className="absolute top-16 right-4 z-50 w-80 bg-black bg-opacity-90 text-green-400 text-xs font-mono p-3 rounded-lg border border-green-600 max-h-[80vh] overflow-y-auto">
+          <div className="border-b border-green-600 pb-2 mb-2 font-bold text-green-300 flex justify-between items-center">
+            <span>MindAR Debug</span>
+            <button 
+              onClick={() => setDebugState(prev => ({ ...prev, debugLog: [] }))}
+              className="text-green-500 hover:text-green-300"
+            >
+              Clear
+            </button>
           </div>
           
           <div className="space-y-1">
@@ -234,6 +289,20 @@ const AppRunner: React.FC = () => {
               <span>Library:</span>
               <span className={debugState.mindarLoaded ? 'text-green-400' : debugState.mindarLoading ? 'text-yellow-400' : 'text-red-400'}>
                 {debugState.mindarLoaded ? '✅ Loaded' : debugState.mindarLoading ? '⏳ Loading...' : '❌ Not loaded'}
+              </span>
+            </div>
+            
+            <div className="flex justify-between">
+              <span>WebGL:</span>
+              <span className={debugState.webglStatus === 'OK' ? 'text-green-400' : debugState.webglStatus === 'Failed' ? 'text-red-400' : 'text-yellow-400'}>
+                {debugState.webglStatus}
+              </span>
+            </div>
+            
+            <div className="flex justify-between">
+              <span>Mind File:</span>
+              <span className={debugState.mindFileStatus === 'Loaded' ? 'text-green-400' : debugState.mindFileStatus === 'Failed' ? 'text-red-400' : 'text-yellow-400'}>
+                {debugState.mindFileStatus}
               </span>
             </div>
             
@@ -280,6 +349,26 @@ const AppRunner: React.FC = () => {
               <div className="border-t border-red-600 pt-2 mt-2">
                 <div className="text-red-400 mb-1">Error:</div>
                 <div className="text-red-300">{debugState.mindarError}</div>
+              </div>
+            )}
+            
+            {/* Debug Log Scroll */}
+            {debugState.debugLog.length > 0 && (
+              <div className="border-t border-green-600 pt-2 mt-2">
+                <div className="text-green-300 mb-1">Debug Log:</div>
+                <div className="max-h-40 overflow-y-auto space-y-0.5 text-[10px]">
+                  {debugState.debugLog.map((entry, i) => (
+                    <div key={i} className={`
+                      ${entry.level === 'ERROR' ? 'text-red-400' : 
+                        entry.level === 'WARN' ? 'text-yellow-400' : 
+                        entry.level === 'INFO' ? 'text-green-400' : 'text-gray-400'}
+                    `}>
+                      <span className="opacity-50">{entry.time}</span>
+                      <span className="mx-1">[{entry.category}]</span>
+                      <span>{entry.message}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </div>

@@ -392,12 +392,25 @@ export const generateAFrameHtml = (project: Project, localAssetMap?: Map<string,
     import { CSS3DRenderer, CSS3DObject } from 'three/addons/renderers/CSS3DRenderer.js';
 
     // --- Debug Helper ---
-    const debugLog = (message, data) => {
+    const debugStartTime = performance.now();
+    const enableDebug = ${enableDebug}; // Set to false in production
+    const debugLog = (level, category, message, data) => {
+        const elapsed = Math.round(performance.now() - debugStartTime);
         const timestamp = new Date().toLocaleTimeString();
-        console.log('[AR Debug ' + timestamp + ']', message, data || '');
-        // Send to parent for debug overlay
-        if (window.parent !== window) {
-            window.parent.postMessage({ type: 'debug', message, data }, '*');
+        const levelName = level === 'ERROR' ? 'ERROR' : level === 'WARN' ? 'WARN ' : level === 'INFO' ? 'INFO ' : 'DEBUG';
+        
+        console.log('[AR ' + levelName + ' ' + timestamp + '] [' + category + '] ' + message, data || '');
+        
+        // Send to parent for debug overlay (only if enableDebug is true)
+        if (enableDebug && window.parent !== window) {
+            window.parent.postMessage({ 
+                type: 'mindar-debug', 
+                level: levelName,
+                category: category,
+                message: message,
+                data: data,
+                elapsed: elapsed
+            }, window.location.origin || '*');
         }
     };
 
@@ -707,7 +720,7 @@ export const generateAFrameHtml = (project: Project, localAssetMap?: Map<string,
             startBtn.disabled = true;
             loadingStatus.innerText = "Loading MindAR library...";
             
-            debugLog('mindarLoading', { progress: 10 });
+            debugLog('INFO', 'LIBRARY', 'mindarLoading', { progress: 10 });
 
             this.mindarThree = new MindARThree({
                 container: this.container,
@@ -722,7 +735,7 @@ export const generateAFrameHtml = (project: Project, localAssetMap?: Map<string,
                 uiError: "yes"
             });
 
-            debugLog('mindarLoaded', {});
+            debugLog('INFO', 'LIBRARY', 'mindarLoaded', {});
 
             this.renderer = this.mindarThree.renderer;
             this.scene = this.mindarThree.scene;
@@ -790,12 +803,12 @@ export const generateAFrameHtml = (project: Project, localAssetMap?: Map<string,
                 
                 // Events
                 anchor.onTargetFound = () => {
-                    debugLog('targetFound', { targetIndex: index });
+                    debugLog('INFO', 'TRACKER', 'targetFound', { targetIndex: index });
                     targetObj.objects.forEach(o => o.activate());
                     this.dispatch(targetObj, 'onActivate');
                 };
                 anchor.onTargetLost = () => {
-                    debugLog('targetLost', { targetIndex: index });
+                    debugLog('INFO', 'TRACKER', 'targetLost', { targetIndex: index });
                     targetObj.objects.forEach(o => o.deactivate());
                     this.dispatch(targetObj, 'onDeactivate');
                 };
@@ -815,7 +828,7 @@ export const generateAFrameHtml = (project: Project, localAssetMap?: Map<string,
             loadingStatus.innerText = "Loaded!";
             startScreen.classList.add('hidden');
             
-            debugLog('cameraReady', {});
+            debugLog('INFO', 'CAMERA', 'cameraReady', {});
             
             // Trigger Init
             this.targets.forEach(t => this.dispatch(t, 'onInit'));

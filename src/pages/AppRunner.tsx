@@ -260,7 +260,7 @@ const AppRunner: React.FC = () => {
         srcDoc={html}
         title="AR Experience"
         style={{ width: '100vw', height: '100vh', border: 'none' }}
-        sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
+        sandbox="allow-scripts allow-popups allow-forms"
       />
       
       {/* Debug Toggle Button */}

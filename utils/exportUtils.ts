@@ -722,6 +722,21 @@ export const generateAFrameHtml = (project: Project, localAssetMap?: Map<string,
             
             debugLog('INFO', 'LIBRARY', 'mindarLoading', { progress: 10 });
 
+            // Check WebGL support first
+            try {
+                const canvas = document.createElement('canvas');
+                const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+                if (!gl) {
+                    throw new Error('WebGL not supported');
+                }
+                debugLog('INFO', 'WEBGL', 'WebGL context created', { vendor: gl.getParameter(gl.VENDOR) });
+            } catch (e: any) {
+                debugLog('ERROR', 'WEBGL', 'WebGL not available', { error: e.message });
+                loadingStatus.innerText = 'Error: WebGL not supported';
+                startBtn.disabled = false;
+                return;
+            }
+
             this.mindarThree = new MindARThree({
                 container: this.container,
                 imageTargetSrc: mindFileUrl,
@@ -821,7 +836,18 @@ export const generateAFrameHtml = (project: Project, localAssetMap?: Map<string,
             this.pointer = new THREE.Vector2();
             window.addEventListener('click', (e) => this.onClick(e));
 
-            await this.mindarThree.start();
+            // Start MindAR - this is where camera access happens
+            debugLog('INFO', 'CAMERA', 'Requesting camera access...', {});
+            try {
+                await this.mindarThree.start();
+                debugLog('INFO', 'CAMERA', 'Camera started successfully', {});
+            } catch (e: any) {
+                debugLog('ERROR', 'CAMERA', 'Failed to start camera', { error: e.message });
+                loadingStatus.innerText = 'Error: ' + (e.message || 'Camera access denied');
+                startBtn.disabled = false;
+                return;
+            }
+            
             this.renderer.setAnimationLoop(() => this.renderLoop());
 
             // UI

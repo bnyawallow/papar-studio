@@ -75,13 +75,14 @@ const PublishModal: React.FC<PublishModalProps> = ({
           const mindBlob = new Blob([mindData], { type: 'application/octet-stream' });
           const mindFile = new File([mindBlob], 'targets.mind', { type: 'application/octet-stream' });
 
-          // Upload or use Object URL
+          // Upload to Supabase Storage
           let uploadedUrl = '';
           try {
              uploadedUrl = await uploadFileToStorage(mindFile);
-          } catch (e) {
-             console.warn("Cloud upload failed or not configured, using local blob URL.");
-             uploadedUrl = URL.createObjectURL(mindBlob);
+          } catch (uploadError) {
+             console.error("Cloud upload failed:", uploadError);
+             onNotify("Failed to upload to cloud storage. Please check your Supabase configuration and try again.", "error");
+             throw uploadError; // Re-throw to stop the publish process
           }
 
           // Update Project with new mind file URL (we attach it to the first target or a project field)

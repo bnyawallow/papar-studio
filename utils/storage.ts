@@ -2,6 +2,7 @@
 import { Project } from '../types';
 import { supabase } from '../src/services/supabase';
 import { MOCK_PROJECTS } from '../data/mockData';
+import { getContentType } from './contentType';
 
 export const loadProjects = async (): Promise<Project[]> => {
   if (!supabase) {
@@ -98,7 +99,21 @@ export const saveProjects = async (projects: Project[]): Promise<boolean> => {
 };
 
 export const deleteProjectFromStorage = async (projectId: string): Promise<boolean> => {
-    if (!supabase) return true; // Local mode always succeeds
+    if (!supabase) {
+        console.warn("[Storage] Supabase not configured - using local storage only");
+        // Delete from localStorage as fallback for local development
+        try {
+            const stored = localStorage.getItem('papar_projects');
+            if (stored) {
+                const projects: Project[] = JSON.parse(stored);
+                const filtered = projects.filter(p => p.id !== projectId);
+                localStorage.setItem('papar_projects', JSON.stringify(filtered));
+            }
+        } catch (e) {
+            console.warn("Failed to delete from localStorage:", e);
+        }
+        return true;
+    }
     try {
         const { error } = await supabase.from('projects').delete().eq('id', projectId);
         if(error) throw error;
@@ -129,9 +144,16 @@ export const uploadFileToStorage = async (file: File): Promise<string> => {
     const fileName = `${Math.random().toString(36).substring(2, 15)}_${Date.now()}.${fileExt}`;
     const filePath = `${fileName}`;
 
+    // Determine content type based on file extension
+    const contentType = getContentType(fileExt);
+
     const { error: uploadError } = await supabase.storage
         .from('assets')
-        .upload(filePath, file);
+        .upload(filePath, file, {
+            cacheControl: '3600',
+            upsert: false,
+            contentType: contentType
+        });
 
     if (uploadError) {
         throw uploadError;

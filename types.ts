@@ -96,6 +96,7 @@ export interface MindARConfig {
     missTolerance: number;
     filterMinCF: number;
     filterBeta: number;
+    autoSaveDelay?: number; // Auto-save delay in milliseconds (default: 10000)
 }
 
 export interface Project {

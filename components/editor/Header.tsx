@@ -1,12 +1,13 @@
 
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
     ChevronLeftIcon, PencilIcon, EyeIcon, PanelLeftIcon, UndoIcon, RedoIcon, SettingsIcon,
-    SaveIcon, CheckIcon, LoaderIcon, HelpCircle
+    SaveIcon, CheckIcon, LoaderIcon, HelpCircle, WifiIcon, ExclamationTriangleIcon
 } from '../icons/Icons';
 import { clsx } from 'clsx';
+import { ConnectionStatus } from '../../src/services/projectService';
 
 export type SaveStatus = 'saved' | 'saving' | 'unsaved' | 'error';
 
@@ -26,6 +27,8 @@ interface HeaderProps {
   onSave?: () => void;
   saveStatus?: SaveStatus;
   onSettings?: () => void;
+  connectionStatus?: ConnectionStatus;
+  pendingSaves?: number;
 }
 
 const Header: React.FC<HeaderProps> = ({ 
@@ -43,7 +46,9 @@ const Header: React.FC<HeaderProps> = ({
   onPreview,
   onSave,
   saveStatus = 'saved',
-  onSettings
+  onSettings,
+  connectionStatus = 'checking',
+  pendingSaves = 0
 }) => {
   const [isEditingName, setIsEditingName] = useState(false);
   const [name, setName] = useState(projectName);
@@ -66,6 +71,35 @@ const Header: React.FC<HeaderProps> = ({
     if (saveStatus === 'error') return `${baseStyle} bg-accent-danger text-white hover:bg-accent-danger/90`;
     // saved
     return `${baseStyle} bg-background-tertiary text-text-tertiary border border-border-default cursor-default`; 
+  };
+
+  // Connection status display
+  const getConnectionIndicator = () => {
+    if (connectionStatus === 'connected') {
+      return (
+        <div className="flex items-center gap-1.5 text-green-600" title="Connected">
+          <WifiIcon className="w-4 h-4" />
+          <span className="text-xs hidden sm:inline">Connected</span>
+        </div>
+      );
+    }
+    if (connectionStatus === 'disconnected') {
+      return (
+        <div className="flex items-center gap-1.5 text-amber-600" title="Offline - changes will sync when reconnected">
+          <ExclamationTriangleIcon className="w-4 h-4" />
+          <span className="text-xs hidden sm:inline">
+            {pendingSaves > 0 ? `Offline (${pendingSaves} pending)` : 'Offline'}
+          </span>
+        </div>
+      );
+    }
+    // checking
+    return (
+      <div className="flex items-center gap-1.5 text-text-tertiary" title="Checking connection...">
+        <LoaderIcon className="w-4 h-4 animate-spin" />
+        <span className="text-xs hidden sm:inline">Checking...</span>
+      </div>
+    );
   };
 
   return (
@@ -122,7 +156,7 @@ const Header: React.FC<HeaderProps> = ({
       </div>
 
       {/* Center Section - Undo/Redo */}
-      <div className="hidden md:flex-shrink-0 px-4 flex items-center gap-1 bg-background-tertiary rounded-lg p-1">
+      <div className="hidden md:flex px-4 flex items-center gap-1 bg-background-tertiary rounded-lg p-1">
         <button
           onClick={onUndo}
           disabled={!canUndo}
@@ -156,6 +190,11 @@ const Header: React.FC<HeaderProps> = ({
       
       {/* Right Section */}
       <div className="flex items-center gap-2 flex-1 justify-end">
+        {/* Connection Status Indicator */}
+        <div className="hidden sm:flex items-center">
+          {getConnectionIndicator()}
+        </div>
+        
         <button 
             onClick={onSettings}
             className="p-2 text-text-secondary hover:text-text-primary hover:bg-background-hover rounded-md transition-colors"

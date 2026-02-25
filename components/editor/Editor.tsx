@@ -19,7 +19,7 @@ import { compileFiles } from '../../utils/compiler';
 import { generateProjectJson, generateProjectZip } from '../../utils/exportUtils';
 import { useDebounce } from '../../hooks/useDebounce';
 import { equal } from '@wry/equality';
-import { getProjectBySlug } from '../../src/services/projectService';
+import { getProjectBySlug, checkCloudConnection, ConnectionStatus, subscribeToConnectionStatus, getPendingSavesCount } from '../../src/services/projectService';
 
 interface EditorProps {
   project: Project;
@@ -40,7 +40,13 @@ const Editor: React.FC<EditorProps> = ({
   // Auto-Save State
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('saved');
   const lastSavedProject = useRef<Project>(initialProject);
-  const debouncedProject = useDebounce(project, 2000); // Auto-save after 2s of inactivity
+  // Use configurable auto-save delay from project settings, default to 10 seconds
+  const autoSaveDelay = project.mindARConfig?.autoSaveDelay || 10000;
+  const debouncedProject = useDebounce(project, autoSaveDelay);
+
+  // Connection State
+  const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('checking');
+  const [pendingSaves, setPendingSaves] = useState(0);
 
   // Selection State
   const [selectedTargetId, setSelectedTargetId] = useState<string | null>(null);
@@ -113,6 +119,7 @@ const Editor: React.FC<EditorProps> = ({
       } catch (e) {
           setSaveStatus('error');
           console.error(e);
+          showToast("Failed to save project. Changes will be synced when connection is restored.", 'error');
       }
   };
 
@@ -122,6 +129,33 @@ const Editor: React.FC<EditorProps> = ({
           performSave();
       }
   }, [debouncedProject]);
+
+  // Monitor connection status
+  useEffect(() => {
+      // Check connection on mount
+      checkCloudConnection();
+      
+      // Subscribe to connection changes
+      const unsubscribe = subscribeToConnectionStatus((status) => {
+          setConnectionStatus(status);
+          if (status === 'connected') {
+              showToast("Connection restored! Syncing changes...", 'success');
+          } else if (status === 'disconnected') {
+              showToast("Connection lost. Changes will be saved when reconnected.", 'error');
+          }
+      });
+      
+      // Update pending saves count periodically
+      const pendingInterval = setInterval(() => {
+          setPendingSaves(getPendingSavesCount());
+      }, 1000);
+      
+      return () => {
+          unsubscribe();
+          clearInterval(pendingInterval);
+      };
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Empty deps because these are stable module functions
 
   const handleProjectNameChange = async (name: string) => {
     const newSlug = name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
@@ -408,6 +442,8 @@ const Editor: React.FC<EditorProps> = ({
         onSave={handleManualSave}
         saveStatus={saveStatus}
         onSettings={() => setIsSettingsModalOpen(true)}
+        connectionStatus={connectionStatus}
+        pendingSaves={pendingSaves}
       />
       
       <div className="flex flex-1 overflow-hidden">

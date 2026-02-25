@@ -2,8 +2,29 @@
 import { Project } from '../../types';
 import { supabase } from './supabase';
 import { MOCK_PROJECTS } from '../../data/mockData';
+import { getContentType } from '../../utils/contentType';
 
 const STORAGE_KEY = 'papar_projects';
+
+export type ConnectionStatus = 'connected' | 'disconnected' | 'checking';
+
+// Connection state management
+let connectionStatus: ConnectionStatus = 'checking';
+let connectionListeners: ((status: ConnectionStatus) => void)[] = [];
+
+export const getConnectionStatus = (): ConnectionStatus => connectionStatus;
+
+export const setConnectionStatus = (status: ConnectionStatus) => {
+  connectionStatus = status;
+  connectionListeners.forEach(listener => listener(status));
+};
+
+export const subscribeToConnectionStatus = (listener: (status: ConnectionStatus) => void) => {
+  connectionListeners.push(listener);
+  return () => {
+    connectionListeners = connectionListeners.filter(l => l !== listener);
+  };
+};
 
 export const loadProjects = async (): Promise<Project[]> => {
   if (!supabase) {
@@ -199,16 +220,50 @@ export const checkProjectNameExists = async (name: string, excludeId?: string): 
   }
 };
 
-export const saveProjects = async (projects: Project[]): Promise<boolean> => {
-  // Always save to localStorage first as backup
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
-  } catch (e) {
-    console.warn("Failed to save to localStorage:", e);
-  }
+// Offline queue for pending saves
+let pendingSaves: Project[] = [];
+let isSyncing = false;
 
+export const getPendingSavesCount = (): number => pendingSaves.length;
+
+export const queueProjectForSync = (projects: Project[]): void => {
+  pendingSaves = projects;
+  // Fire and forget - process async but don't block
+  processPendingSaves().catch(err => {
+    console.error('Background sync failed:', err);
+  });
+};
+
+const processPendingSaves = async (): Promise<void> => {
+  if (isSyncing || pendingSaves.length === 0 || connectionStatus !== 'connected') {
+    return;
+  }
+  
+  isSyncing = true;
+  const projectsToSave = [...pendingSaves];
+  pendingSaves = [];
+  
+  try {
+    await saveProjectsToSupabase(projectsToSave);
+  } catch (e) {
+    console.error('Failed to sync pending saves:', e);
+    // Re-queue failed saves
+    pendingSaves = [...projectsToSave, ...pendingSaves];
+  } finally {
+    isSyncing = false;
+  }
+};
+
+const saveProjectsToSupabase = async (projects: Project[]): Promise<boolean> => {
   if (!supabase) {
-    return true; // Local mode always succeeds
+    console.warn("[Storage] Supabase not configured - using local storage only");
+    // Save to localStorage as fallback for local development
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
+    } catch (e) {
+      console.warn("Failed to save to localStorage:", e);
+    }
+    return true;
   }
 
   const payload = projects.map(p => ({
@@ -229,24 +284,51 @@ export const saveProjects = async (projects: Project[]): Promise<boolean> => {
     return true;
   } catch (e) {
     console.error("Failed to save to Supabase", e);
-    return false;
+    throw e;
   }
 };
 
-export const deleteProjectFromStorage = async (projectId: string): Promise<boolean> => {
-  // Remove from localStorage first
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      const projects: Project[] = JSON.parse(stored);
-      const filtered = projects.filter(p => p.id !== projectId);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered));
+// Main save function - uses offline queue when disconnected
+export const saveProjects = async (projects: Project[]): Promise<boolean> => {
+  // If connected, try to save directly
+  if (connectionStatus === 'connected') {
+    try {
+      return await saveProjectsToSupabase(projects);
+    } catch (e) {
+      console.error('Direct save failed, queueing for later:', e);
+      // Fall through to queue
     }
-  } catch (e) {
-    console.warn("Failed to delete from localStorage:", e);
   }
+  
+  // If not connected, queue for later
+  if (connectionStatus === 'disconnected') {
+    console.warn('Offline: Queuing project for sync when connection is restored');
+    queueProjectForSync(projects);
+    // Return true to indicate we'll handle it later
+    return true;
+  }
+  
+  // If checking, queue it
+  queueProjectForSync(projects);
+  return true;
+};
 
-  if (!supabase) return true;
+export const deleteProjectFromStorage = async (projectId: string): Promise<boolean> => {
+  if (!supabase) {
+    console.warn("[Storage] Supabase not configured - using local storage only");
+    // Delete from localStorage as fallback for local development
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored) {
+        const projects: Project[] = JSON.parse(stored);
+        const filtered = projects.filter(p => p.id !== projectId);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered));
+      }
+    } catch (e) {
+      console.warn("Failed to delete from localStorage:", e);
+    }
+    return true;
+  }
 
   try {
     const { error } = await supabase.from('projects').delete().eq('id', projectId);
@@ -261,17 +343,24 @@ export const deleteProjectFromStorage = async (projectId: string): Promise<boole
 export const checkCloudConnection = async (): Promise<boolean> => {
   if (!supabase) {
     console.warn("[Storage] Supabase client not initialized.");
+    setConnectionStatus('disconnected');
     return false;
   }
   try {
+    setConnectionStatus('checking');
     const { error } = await supabase.from('projects').select('id').limit(1);
     if (error) {
       console.error("[Storage] Connection check failed:", error.message);
+      setConnectionStatus('disconnected');
       return false;
     }
+    setConnectionStatus('connected');
+    // Try to sync any pending saves when connection is restored
+    processPendingSaves();
     return true;
   } catch (e) {
     console.error("[Storage] Connection check exception:", e);
+    setConnectionStatus('disconnected');
     return false;
   }
 };
@@ -295,9 +384,16 @@ export const uploadFileToStorage = async (file: File): Promise<string> => {
   const fileName = `${Math.random().toString(36).substring(2, 15)}_${Date.now()}.${fileExt}`;
   const filePath = `${fileName}`;
 
+  // Determine content type based on file extension
+  const contentType = getContentType(fileExt);
+
   const { error: uploadError } = await supabase.storage
     .from('assets')
-    .upload(filePath, file);
+    .upload(filePath, file, {
+        cacheControl: '3600',
+        upsert: false,
+        contentType: contentType
+    });
 
   if (uploadError) {
     throw uploadError;

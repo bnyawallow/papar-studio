@@ -3,6 +3,14 @@ import { Project } from '../../types';
 import { supabase } from './supabase';
 import { MOCK_PROJECTS } from '../../data/mockData';
 import { getContentType } from '../../utils/contentType';
+import {
+  saveProjectsToLocalStorage,
+  loadProjectsFromLocalStorage,
+  deleteProjectFromLocalStorage,
+  isQuotaExceededError,
+  getStorageStats,
+  isStorageNearLimit
+} from '../../utils/storageManager';
 
 const STORAGE_KEY = 'papar_projects';
 
@@ -29,14 +37,10 @@ export const subscribeToConnectionStatus = (listener: (status: ConnectionStatus)
 export const loadProjects = async (): Promise<Project[]> => {
   if (!supabase) {
     console.warn("Supabase not connected. Using local storage.");
-    // Try localStorage first
-    const stored = localStorage.getItem(STORAGE_KEY);
+    // Use storage manager for localStorage with quota handling
+    const stored = loadProjectsFromLocalStorage();
     if (stored) {
-      try {
-        return JSON.parse(stored);
-      } catch (e) {
-        console.error("Failed to parse stored projects", e);
-      }
+      return stored;
     }
     // Return mocks if no local data
     return MOCK_PROJECTS;
@@ -71,15 +75,10 @@ export const loadProjects = async (): Promise<Project[]> => {
 
 export const getProjectById = async (id: string): Promise<Project | null> => {
   if (!supabase) {
-    // Try localStorage
-    const stored = localStorage.getItem(STORAGE_KEY);
+    // Use storage manager for localStorage
+    const stored = loadProjectsFromLocalStorage();
     if (stored) {
-      try {
-        const projects: Project[] = JSON.parse(stored);
-        return projects.find(p => p.id === id) || null;
-      } catch (e) {
-        console.error("Failed to parse stored projects", e);
-      }
+      return stored.find(p => p.id === id) || null;
     }
     return MOCK_PROJECTS.find(p => p.id === id) || null;
   }
@@ -123,20 +122,15 @@ const generateSlug = (name: string): string => {
 // Get project by slug (for published apps accessed via /apps/project-name)
 export const getProjectBySlug = async (slug: string): Promise<Project | null> => {
   if (!supabase) {
-    // Try localStorage
-    const stored = localStorage.getItem(STORAGE_KEY);
+    // Use storage manager for localStorage
+    const stored = loadProjectsFromLocalStorage();
     if (stored) {
-      try {
-        const projects: Project[] = JSON.parse(stored);
-        // Find project with matching slug (either generated from name or stored publishedSlug)
-        const found = projects.find(p => 
-          generateSlug(p.name) === slug || 
-          ((p as any).publishedSlug && (p as any).publishedSlug === slug)
-        );
-        return found || null;
-      } catch (e) {
-        console.error("Failed to parse stored projects", e);
-      }
+      // Find project with matching slug (either generated from name or stored publishedSlug)
+      const found = stored.find(p => 
+        generateSlug(p.name) === slug || 
+        ((p as any).publishedSlug && (p as any).publishedSlug === slug)
+      );
+      return found || null;
     }
     // Check mock projects
     return MOCK_PROJECTS.find(p => generateSlug(p.name) === slug) || null;
@@ -178,19 +172,14 @@ export const checkProjectNameExists = async (name: string, excludeId?: string): 
   const slug = name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
   
   if (!supabase) {
-    // Check localStorage
-    const stored = localStorage.getItem(STORAGE_KEY);
+    // Check localStorage using storage manager
+    const stored = loadProjectsFromLocalStorage();
     if (stored) {
-      try {
-        const projects: Project[] = JSON.parse(stored);
-        return projects.some(p => 
-          (p.name.toLowerCase() === name.toLowerCase() || 
-           generateSlug(p.name) === slug) && 
-          p.id !== excludeId
-        );
-      } catch (e) {
-        console.error("Failed to parse stored projects", e);
-      }
+      return stored.some(p => 
+        (p.name.toLowerCase() === name.toLowerCase() || 
+         generateSlug(p.name) === slug) && 
+        p.id !== excludeId
+      );
     }
     // Check mock projects
     return MOCK_PROJECTS.some(p => 
@@ -257,13 +246,9 @@ const processPendingSaves = async (): Promise<void> => {
 const saveProjectsToSupabase = async (projects: Project[]): Promise<boolean> => {
   if (!supabase) {
     console.warn("[Storage] Supabase not configured - using local storage only");
-    // Save to localStorage as fallback for local development
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
-    } catch (e) {
-      console.warn("Failed to save to localStorage:", e);
-    }
-    return true;
+    // Save to localStorage with quota handling
+    const success = saveProjectsToLocalStorage(projects);
+    return success;
   }
 
   const payload = projects.map(p => ({
@@ -314,20 +299,12 @@ export const saveProjects = async (projects: Project[]): Promise<boolean> => {
 };
 
 export const deleteProjectFromStorage = async (projectId: string): Promise<boolean> => {
+  // Always delete from localStorage first
+  const localDeleted = deleteProjectFromLocalStorage(projectId);
+  
   if (!supabase) {
-    console.warn("[Storage] Supabase not configured - using local storage only");
-    // Delete from localStorage as fallback for local development
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        const projects: Project[] = JSON.parse(stored);
-        const filtered = projects.filter(p => p.id !== projectId);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered));
-      }
-    } catch (e) {
-      console.warn("Failed to delete from localStorage:", e);
-    }
-    return true;
+    console.warn("[Storage] Supabase not configured - localStorage only");
+    return localDeleted;
   }
 
   try {

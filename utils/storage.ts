@@ -3,6 +3,11 @@ import { Project } from '../types';
 import { supabase } from '../src/services/supabase';
 import { MOCK_PROJECTS } from '../data/mockData';
 import { getContentType } from './contentType';
+import {
+  saveProjectsToLocalStorage,
+  loadProjectsFromLocalStorage,
+  deleteProjectFromLocalStorage
+} from './storageManager';
 
 export const loadProjects = async (): Promise<Project[]> => {
   if (!supabase) {
@@ -71,7 +76,10 @@ export const getProjectById = async (id: string): Promise<Project | null> => {
 }
 
 export const saveProjects = async (projects: Project[]): Promise<boolean> => {
-  if (!supabase) return true; // Local mode always succeeds in memory (for UI purposes)
+  if (!supabase) {
+    // Use storage manager with quota handling for local-only mode
+    return saveProjectsToLocalStorage(projects);
+  }
 
   // We only save the active project usually, but this function signature expects the whole list.
   // In a real cloud app, we usually save one project at a time. 
@@ -99,29 +107,24 @@ export const saveProjects = async (projects: Project[]): Promise<boolean> => {
 };
 
 export const deleteProjectFromStorage = async (projectId: string): Promise<boolean> => {
-    if (!supabase) {
-        console.warn("[Storage] Supabase not configured - using local storage only");
-        // Delete from localStorage as fallback for local development
-        try {
-            const stored = localStorage.getItem('papar_projects');
-            if (stored) {
-                const projects: Project[] = JSON.parse(stored);
-                const filtered = projects.filter(p => p.id !== projectId);
-                localStorage.setItem('papar_projects', JSON.stringify(filtered));
-            }
-        } catch (e) {
-            console.warn("Failed to delete from localStorage:", e);
-        }
-        return true;
-    }
-    try {
-        const { error } = await supabase.from('projects').delete().eq('id', projectId);
-        if(error) throw error;
-        return true;
-    } catch(e) {
-        console.error("Failed to delete project", e);
-        return false;
-    }
+  // Always try to delete from localStorage using storage manager
+  const localDeleted = deleteProjectFromLocalStorage(projectId);
+  
+  if (!supabase) {
+    console.warn("[Storage] Supabase not configured - localStorage only");
+    return localDeleted;
+  }
+  
+  // Always attempt cloud deletion regardless of local result
+  // Local failure shouldn't affect cloud sync
+  try {
+    const { error } = await supabase.from('projects').delete().eq('id', projectId);
+    if (error) throw error;
+    return true; // Cloud deletion succeeded
+  } catch (e) {
+    console.error("Failed to delete project from cloud", e);
+    return localDeleted; // Fall back to local result
+  }
 }
 
 // Convert file to base64 (kept for legacy or small files if needed)
@@ -184,3 +187,13 @@ export const checkCloudConnection = async (): Promise<boolean> => {
         return false;
     }
 }
+
+// Re-export storage manager functions for external use
+export {
+  saveProjectsToLocalStorage,
+  loadProjectsFromLocalStorage,
+  deleteProjectFromLocalStorage,
+  getStorageStats,
+  isStorageNearLimit,
+  isQuotaExceededError
+} from './storageManager';

@@ -261,6 +261,10 @@ const AppRunner: React.FC = () => {
         title="AR Experience"
         style={{ width: '100vw', height: '100vh', border: 'none' }}
         sandbox="allow-scripts allow-popups allow-forms"
+        onError={(e) => {
+          console.error('iframe error:', e);
+          setError('Failed to load AR experience. The project may contain invalid data.');
+        }}
       />
       
       {/* Debug Toggle Button */}

@@ -318,7 +318,13 @@ export const generateAFrameHtml = (project: Project, localAssetMap?: Map<string,
         });
     }
 
-    const projectDataString = JSON.stringify(exportProject);
+    // Use JSON.stringify for safe JavaScript injection - properly escapes all characters
+    const projectDataString = JSON.stringify(exportProject)
+        .replace(/</g, '\\u003c')  // Escape < to prevent script injection
+        .replace(/>/g, '\\u003e')  // Escape > to prevent script injection
+        .replace(/&/g, '&amp;')      // Escape & 
+        .replace(/'/g, "\\'")       // Escape single quotes
+        .replace(/"/g, '\\"');    // Escape double quotes
 
     return `<!DOCTYPE html>
 <html lang="en">

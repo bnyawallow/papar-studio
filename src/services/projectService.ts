@@ -47,13 +47,20 @@ export const loadProjects = async (): Promise<Project[]> => {
   }
 
   try {
-    const { data, error } = await supabase
+    const { data, error, status } = await supabase
       .from('projects')
       .select('*')
       .order('last_updated', { ascending: false });
 
+    // Handle 406 Not Acceptable - often indicates RLS or header issues
     if (error) {
       console.error('Supabase load error:', error);
+      // Check for common error codes that might manifest as 406
+      if (error.code === 'PGRST116' || status === 406) {
+        console.warn('Supabase returned 406 - falling back to local storage');
+        const stored = loadProjectsFromLocalStorage();
+        return stored || [];
+      }
       throw error;
     }
 
@@ -84,7 +91,7 @@ export const getProjectById = async (id: string): Promise<Project | null> => {
   }
 
   try {
-    const { data, error } = await supabase
+    const { data, error, status } = await supabase
       .from('projects')
       .select('*')
       .eq('id', id)
@@ -92,7 +99,13 @@ export const getProjectById = async (id: string): Promise<Project | null> => {
 
     // Don't throw on PGRST116 (no rows) - return null instead so fallback to slug works
     if (error) {
-      if (error.code === 'PGRST116') {
+      // Handle 406 errors - fallback to localStorage
+      if (error.code === 'PGRST116' || status === 406) {
+        console.warn('Project not found in Supabase, trying local storage');
+        const stored = loadProjectsFromLocalStorage();
+        if (stored) {
+          return stored.find(p => p.id === id) || null;
+        }
         return null;
       }
       throw error;
@@ -110,6 +123,11 @@ export const getProjectById = async (id: string): Promise<Project | null> => {
     }
   } catch (e) {
     console.error("Failed to load project:", e);
+    // Fallback to localStorage on any error
+    const stored = loadProjectsFromLocalStorage();
+    if (stored) {
+      return stored.find(p => p.id === id) || null;
+    }
   }
   return null;
 };
@@ -138,14 +156,29 @@ export const getProjectBySlug = async (slug: string): Promise<Project | null> =>
 
   try {
     // Query directly by published_slug for efficiency
-    const { data, error } = await supabase
+    const { data, error, status } = await supabase
       .from('projects')
       .select('*')
       .eq('status', 'Published')
       .or('published_slug.eq.' + slug + ',name.ilike.' + slug)
       .limit(1);
 
-    if (error) throw error;
+    // Handle 406 errors - fallback to localStorage
+    if (error) {
+      console.warn('Supabase slug query error:', error);
+      if (status === 406) {
+        console.warn('Supabase returned 406 - falling back to local storage for slug lookup');
+        const stored = loadProjectsFromLocalStorage();
+        if (stored) {
+          const found = stored.find(p => 
+            generateSlug(p.name) === slug || 
+            ((p as any).publishedSlug && (p as any).publishedSlug === slug)
+          );
+          return found || null;
+        }
+      }
+      throw error;
+    }
     
     if (data && data.length > 0) {
       const found = data[0];
@@ -163,6 +196,14 @@ export const getProjectBySlug = async (slug: string): Promise<Project | null> =>
     }
   } catch (e) {
     console.error("Failed to load project by slug:", e);
+    // Fallback to localStorage on error
+    const stored = loadProjectsFromLocalStorage();
+    if (stored) {
+      return stored.find(p => 
+        generateSlug(p.name) === slug || 
+        ((p as any).publishedSlug && (p as any).publishedSlug === slug)
+      ) || null;
+    }
   }
   return null;
 };

@@ -1,8 +1,8 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import DashboardComponent from '../../components/dashboard/Dashboard';
-import { Project } from '../../types';
-import { MOCK_TEMPLATES } from '../../data/mockData';
+import { Project, Template } from '../../types';
+import { getAllTemplates, ensureDefaultTracker, cloneTemplateProject } from '../services/templateService';
 import { loadProjects, saveProjects, checkCloudConnection, deleteProjectFromStorage } from '../services/projectService';
 import Toast, { ToastType } from '../../components/ui/Toast';
 
@@ -40,13 +40,24 @@ const Dashboard: React.FC = () => {
     });
   }, []);
 
-  const handleCreateProject = useCallback((template: Project) => {
+  const handleCreateProject = useCallback((template: Template) => {
+    // Clone the template project with proper metadata
+    const templateProject = template.project;
+    
+    // Ensure default tracker is included
+    const projectWithDefaults = templateProject.targets.length > 0 
+      ? templateProject 
+      : ensureDefaultTracker(templateProject);
+    
     const newProject: Project = {
-      ...template,
+      ...projectWithDefaults,
       id: `proj_${Date.now()}`,
       name: template.name === 'Blank Project' ? 'Untitled Project' : `${template.name} Clone`,
       lastUpdated: new Date().toLocaleString(),
       status: 'Draft',
+      // Preserve template metadata
+      templateId: template.id,
+      templateName: template.name,
     };
     const newProjects = [newProject, ...projects];
     setProjects(newProjects);
@@ -93,7 +104,7 @@ const Dashboard: React.FC = () => {
     <>
       <DashboardComponent
         projects={projects}
-        templates={MOCK_TEMPLATES}
+        templates={getAllTemplates()}
         onCreateProject={handleCreateProject}
         onOpenProject={handleOpenProject}
         onDeleteProject={handleDeleteProject}

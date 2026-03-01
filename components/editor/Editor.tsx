@@ -20,6 +20,7 @@ import { generateProjectJson, generateProjectZip } from '../../utils/exportUtils
 import { useDebounce } from '../../hooks/useDebounce';
 import { equal } from '@wry/equality';
 import { getProjectBySlug, checkCloudConnection, ConnectionStatus, subscribeToConnectionStatus, getPendingSavesCount } from '../../src/services/projectService';
+import { ensureDefaultTracker } from '../../src/services/templateService';
 
 interface EditorProps {
   project: Project;
@@ -35,7 +36,10 @@ const Editor: React.FC<EditorProps> = ({
     onSaveProject 
 }) => {
   // History State for Undo/Redo
-  const [project, setProject, undo, redo, canUndo, canRedo] = useHistoryState<Project>(initialProject);
+  // Ensure project has default tracker on initial load
+  const [project, setProject, undo, redo, canUndo, canRedo] = useHistoryState<Project>(
+    initialProject.targets.length === 0 ? ensureDefaultTracker(initialProject) : initialProject
+  );
   
   // Auto-Save State
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('saved');
@@ -51,6 +55,14 @@ const Editor: React.FC<EditorProps> = ({
   // Selection State
   const [selectedTargetId, setSelectedTargetId] = useState<string | null>(null);
   const [selectedContentId, setSelectedContentId] = useState<string | null>(null);
+
+  // Auto-select first tracker on project load
+  useEffect(() => {
+    if (project.targets.length > 0 && !selectedTargetId) {
+      // Auto-select first target for visibility
+      setSelectedTargetId(project.targets[0].id);
+    }
+  }, [project.targets, selectedTargetId]);
 
   // UI State
   const [isLeftPanelOpen, setIsLeftPanelOpen] = useState(true);
@@ -429,6 +441,7 @@ const Editor: React.FC<EditorProps> = ({
     <div className="flex flex-col h-screen overflow-hidden bg-background-primary">
       <Header 
         projectName={project.name}
+        templateName={project.templateName}
         onProjectNameChange={handleProjectNameChange}
         onGoToDashboard={onGoToDashboard}
         onToggleLeftPanel={() => setIsLeftPanelOpen(!isLeftPanelOpen)}

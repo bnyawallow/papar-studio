@@ -12,7 +12,7 @@ import { Search, Plus, Cloud, CloudOff, Crown } from '../icons/Icons';
 interface DashboardProps {
   projects: Project[];
   templates: Template[];
-  onCreateProject: (template: Project) => void;
+  onCreateProject: (template: Template) => void;
   onOpenProject: (projectId: string) => void;
   onDeleteProject: (projectId: string) => void;
   isConnected: boolean;

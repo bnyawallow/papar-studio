@@ -11,8 +11,14 @@ export enum ContentType {
   IMAGE = 'image',
   VIDEO = 'video',
   STREAMING_VIDEO = 'streaming-video',
+  // TODO: Implement YOUTUBE content type support - used for embedding YouTube videos directly
+  YOUTUBE = 'youtube',
+  // TODO: Implement VIMEO content type support - used for embedding Vimeo videos directly
+  VIMEO = 'vimeo',
   AUDIO = 'audio',
   MODEL = 'model',
+  // TODO: Implement EMBED content type support - used for embedding third-party content (iframes, etc.)
+  EMBED = 'embed',
 }
 
 export interface Transform {
@@ -70,14 +76,31 @@ export interface Content {
   textureOverrides?: Record<string, string>; // materialName -> imageUrl (Legacy)
   materialOverrides?: Record<string, MaterialProperties>; // Advanced material editing
   materialNames?: string[]; // Detected material names
+  // Pictarize Studio additional properties
+  // TODO: Implement embedUrl support - for EMBED content type rendering
+  embedUrl?: string; // For EMBED content type
+  // TODO: Implement aspectRatio support - for controlling video/image aspect ratios
+  aspectRatio?: string; // e.g., '16:9', '4:3'
+  // TODO: Implement fitMode support - for object-fit style rendering
+  fitMode?: 'cover' | 'contain' | 'fill';
+  // Note: opacity is already defined in MaterialProperties, keeping here for content-level control
+  opacity?: number;
+  // TODO: Implement animationIn/Out - for entry/exit animations on content
+  animationIn?: string; // Entry animation
+  animationOut?: string; // Exit animation
+  // TODO: Implement delay/duration - for controlling animation timing
+  delay?: number; // Animation delay in ms
+  duration?: number; // Animation duration in ms
 }
 
 export interface Asset {
     id: string; // Add ID for better tracking
     name: string;
-    type: 'image' | 'video' | 'audio' | 'model' | 'mind' | 'script';
+    type: 'image' | 'video' | 'audio' | 'model' | 'mind' | 'script' | 'embed';
     url: string; // Generic URL field
     thumbnail?: string; // For videos/models
+    contentType?: ContentType; // Link to ContentType for compatibility
+    metadata?: Record<string, unknown>; // Additional metadata
 }
 
 export interface Target {
@@ -109,6 +132,9 @@ export interface Project {
   status: 'Draft' | 'Published';
   sizeMB: number;
   publishedSlug?: string; // Store the slug used when published for URL consistency
+  // Template metadata
+  templateId?: string; // ID of template used to create this project
+  templateName?: string; // Human-readable template name
 }
 
 export interface Template {
@@ -117,6 +143,8 @@ export interface Template {
     description: string;
     imageUrl: string;
     project: Project;
+    version?: string; // Template version for migrations
+    category?: string; // e.g., 'business', 'education', 'entertainment'
 }
 
 export interface SceneSettings {

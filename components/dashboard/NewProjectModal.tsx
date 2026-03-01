@@ -9,7 +9,7 @@ import { clsx } from 'clsx';
 interface NewProjectModalProps {
   templates: Template[];
   onClose: () => void;
-  onCreate: (template: Project) => void;
+  onCreate: (template: Template) => void;
 }
 
 const NewProjectModal: React.FC<NewProjectModalProps> = ({ templates, onClose, onCreate }) => {
@@ -48,7 +48,7 @@ const NewProjectModal: React.FC<NewProjectModalProps> = ({ templates, onClose, o
                 'transition-all duration-200 cursor-pointer'
               )}
               style={{ animationDelay: `${index * 50}ms` }}
-              onClick={() => onCreate(template.project)}
+              onClick={() => onCreate(template)}
             >
               {/* Thumbnail */}
               <div className="relative h-28 rounded-md overflow-hidden mb-3">

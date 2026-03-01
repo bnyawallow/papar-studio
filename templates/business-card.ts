@@ -1,5 +1,4 @@
-
-import { Project, Template, ContentType, Target } from '../types';
+import { Template, Target, ContentType } from '../types';
 
 const demoScript = `
 // Demo Script for Business Card
@@ -51,7 +50,7 @@ const businessCardTarget: Target = {
       type: ContentType.AVATAR,
       transform: { position: [-33.34, 0.00, 158.16], rotation: [0, 0, 0], scale: [3.53, 3.53, 3.53] },
       visible: true,
-      imageUrl: 'https://picsum.photos/seed/avatar/200/200', // Placeholder image
+      imageUrl: 'https://picsum.photos/seed/avatar/200/200',
     },
     {
       id: 'content_resume',
@@ -59,7 +58,7 @@ const businessCardTarget: Target = {
       type: ContentType.RESUME,
       transform: { position: [-100.0, 0.00, 0.00], rotation: [-90, 0, 0], scale: [100.0, 100.0, 1.00] },
       visible: true,
-      imageUrl: 'https://picsum.photos/seed/resume/300/400', // Placeholder image
+      imageUrl: 'https://picsum.photos/seed/resume/300/400',
     },
     {
       id: 'content_icon_fb',
@@ -107,90 +106,25 @@ const businessCardTarget: Target = {
       weight: 'normal',
       size: 32,
       align: 'left',
-      textContent: 'Visual elements (e.g. buttons) and information display\\nTransitional effects and animations with pure scripting.\\nOpen external links when buttons are click.',
+      textContent: 'Visual elements (e.g. buttons) and information display\nTransitional effects and animations with pure scripting.\nOpen external links when buttons are click.',
       visible: true,
     },
   ],
 };
 
-export const MOCK_PROJECTS: Project[] = [
-  {
-    id: 'proj_1',
-    name: 'Clone-Business Card Template',
-    targets: [businessCardTarget],
-    lastUpdated: '21 hours ago',
-    status: 'Draft',
-    sizeMB: 2.3,
-  },
-  {
-    id: 'proj_2',
-    name: 'redapeke-test1',
-    targets: [],
-    lastUpdated: '7 minutes ago',
-    status: 'Draft',
-    sizeMB: 0,
-  },
-];
-
-const BLANK_PROJECT_TEMPLATE: Project = {
-    id: 'template_blank',
-    name: 'Blank Project',
-    targets: [],
-    lastUpdated: '',
-    status: 'Draft',
-    sizeMB: 0.1
-};
-
-const BUSINESS_CARD_PROJECT_TEMPLATE: Project = {
-    id: 'template_bc',
+export const businessCardTemplate: Template = {
+    id: 'tpl_business_card',
     name: 'Business Card',
-    targets: [businessCardTarget],
-    lastUpdated: '',
-    status: 'Draft',
-    sizeMB: 2.3
-};
-
-export const MOCK_TEMPLATES: Template[] = [
-    {
-        id: 'tpl_1',
-        name: 'Blank Project',
-        description: '',
-        imageUrl: 'https://picsum.photos/seed/blank/200/120',
-        project: BLANK_PROJECT_TEMPLATE,
-    },
-    {
-        id: 'tpl_2',
-        name: 'Slideshow',
-        description: 'Multiple videos carousel effect (script)',
-        imageUrl: 'https://picsum.photos/seed/slideshow/200/120',
-        project: BLANK_PROJECT_TEMPLATE, // Should be a specific template
-    },
-    {
-        id: 'tpl_3',
-        name: 'Flash Cards',
-        description: 'Multiple targets background music audio on click (script)',
-        imageUrl: 'https://picsum.photos/seed/flashcards/200/120',
-        project: BLANK_PROJECT_TEMPLATE, // Should be a specific template
-    },
-    {
-        id: 'tpl_4',
-        name: 'Performance',
-        description: 'real persons green screen background removal',
-        imageUrl: 'https://picsum.photos/seed/performance/200/120',
-        project: BLANK_PROJECT_TEMPLATE, // Should be a specific template
-    },
-    {
-        id: 'tpl_5',
+    description: 'Information display open external URLs transition effects (script)',
+    imageUrl: 'https://picsum.photos/seed/card/200/120',
+    category: 'business',
+    version: '1.0.0',
+    project: {
+        id: 'template_bc',
         name: 'Business Card',
-        description: 'Information display open external URLs transition effects (script)',
-        imageUrl: 'https://picsum.photos/seed/card/200/120',
-        project: BUSINESS_CARD_PROJECT_TEMPLATE,
-    },
-    {
-        id: 'tpl_6',
-        name: 'Animated Models',
-        description: 'custom animations control (script)',
-        imageUrl: 'https://picsum.photos/seed/animated/200/120',
-        project: BLANK_PROJECT_TEMPLATE, // Should be a specific template
+        targets: [businessCardTarget],
+        lastUpdated: '',
+        status: 'Draft',
+        sizeMB: 2.3
     }
-];
+};

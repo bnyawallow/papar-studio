@@ -13,6 +13,7 @@ export type SaveStatus = 'saved' | 'saving' | 'unsaved' | 'error';
 
 interface HeaderProps {
   projectName: string;
+  templateName?: string; // NEW: Template origin
   onProjectNameChange: (name: string) => void;
   onGoToDashboard: () => void;
   onToggleLeftPanel: () => void;
@@ -33,6 +34,7 @@ interface HeaderProps {
 
 const Header: React.FC<HeaderProps> = ({ 
   projectName, 
+  templateName, // NEW: Template origin
   onProjectNameChange, 
   onGoToDashboard, 
   onToggleLeftPanel, 
@@ -144,6 +146,11 @@ const Header: React.FC<HeaderProps> = ({
         ) : (
           <div className="flex items-center gap-2 min-w-0">
             <h1 className="text-base font-semibold text-text-primary truncate">{projectName}</h1>
+            {templateName && (
+              <span className="text-xs text-text-tertiary bg-background-tertiary px-2 py-0.5 rounded-full flex-shrink-0">
+                Created from: {templateName}
+              </span>
+            )}
             <button 
                 onClick={() => setIsEditingName(true)} 
                 className="text-text-tertiary hover:text-accent-primary transition-colors flex-shrink-0" 

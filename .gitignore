@@ -40,3 +40,5 @@ next-env.d.ts
 # refcode and screenshots
 refcode/
 screenshots/
+
+.vercel

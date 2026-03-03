@@ -108,6 +108,7 @@ const openDB = (): Promise<IDBDatabase> => {
         projectStore.createIndex('name', 'name', { unique: false });
         projectStore.createIndex('lastUpdated', 'lastUpdated', { unique: false });
         projectStore.createIndex('status', 'status', { unique: false });
+        projectStore.createIndex('publishedSlug', 'publishedSlug', { unique: false });
         console.log('[IndexedDB] Projects store created with indexes');
       }
     };
@@ -320,6 +321,65 @@ export const getProjectByIdFromIndexedDB = async (id: string): Promise<Project |
     });
   } catch (error) {
     console.error('[IndexedDB] Error getting project:', error);
+    invalidateCache();
+    return null;
+  }
+};
+
+/**
+ * Load a single project by slug from IndexedDB
+ * Searches by publishedSlug or generates slug from name
+ */
+export const getProjectBySlugFromIndexedDB = async (slug: string): Promise<Project | null> => {
+  try {
+    const db = await openDB();
+    
+    // Check connection state before operation
+    if (!db || !isConnectionValid) {
+      console.warn('[IndexedDB] Database connection invalid, invalidating cache and retrying');
+      invalidateCache();
+      return getProjectBySlugFromIndexedDB(slug);
+    }
+    
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction([PROJECTS_STORE], 'readonly');
+      const store = transaction.objectStore(PROJECTS_STORE);
+      
+      // Get all projects and filter by slug (since we need to check both publishedSlug and name)
+      const request = store.getAll();
+      
+      request.onsuccess = () => {
+        const projects = request.result;
+        
+        // Helper to generate slug from name
+        const generateSlug = (name: string): string => {
+          return name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+        };
+        
+        // Find project with matching slug
+        const found = projects.find((p: any) => {
+          const projectSlug = p.publishedSlug || generateSlug(p.name);
+          return projectSlug === slug;
+        });
+        
+        if (found) {
+          const { _savedAt, ...cleanProject } = found;
+          resolve(cleanProject as Project);
+        } else {
+          resolve(null);
+        }
+      };
+      
+      request.onerror = () => {
+        console.error('[IndexedDB] Failed to get project by slug:', request.error);
+        reject(request.error);
+      };
+      
+      // Don't close the connection
+      transaction.oncomplete = () => {};
+    });
+  } catch (error) {
+    console.error('[IndexedDB] Error getting project by slug:', error);
     invalidateCache();
     return null;
   }

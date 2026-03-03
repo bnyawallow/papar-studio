@@ -3,17 +3,26 @@
 
 import React from 'react';
 import { Project } from '../../types';
-import { TrashIcon, PencilIcon, EyeIcon, DuplicateIcon, MoreVertical } from '../icons/Icons';
+import { TrashIcon, PencilIcon, EyeIcon, DuplicateIcon, MoreVertical, CloudArrowUpIcon, CloudArrowDownIcon } from '../icons/Icons';
 import { clsx } from 'clsx';
 
 interface ProjectListProps {
   projects: Project[];
   onOpenProject: (projectId: string) => void;
   onDeleteProject: (projectId: string) => void;
+  onTogglePublish?: (projectId: string, makePublished: boolean) => void;
   isLoading?: boolean;
+  togglingPublishId?: string | null;
 }
 
-const ProjectList: React.FC<ProjectListProps> = ({ projects, onOpenProject, onDeleteProject, isLoading = false }) => {
+const ProjectList: React.FC<ProjectListProps> = ({ 
+  projects, 
+  onOpenProject, 
+  onDeleteProject, 
+  onTogglePublish, 
+  isLoading = false,
+  togglingPublishId
+}) => {
   if (isLoading) {
       return (
         <div className="p-6">
@@ -57,7 +66,9 @@ const ProjectList: React.FC<ProjectListProps> = ({ projects, onOpenProject, onDe
             project={project} 
             onOpen={onOpenProject}
             onDelete={onDeleteProject}
+            onTogglePublish={onTogglePublish}
             index={index}
+            isTogglingPublish={togglingPublishId === project.id}
           />
         ))}
       </div>
@@ -69,10 +80,12 @@ interface ProjectCardProps {
   project: Project;
   onOpen: (projectId: string) => void;
   onDelete: (projectId: string) => void;
+  onTogglePublish?: (projectId: string, makePublished: boolean) => void;
   index: number;
+  isTogglingPublish?: boolean;
 }
 
-const ProjectCard: React.FC<ProjectCardProps> = ({ project, onOpen, onDelete, index }) => {
+const ProjectCard: React.FC<ProjectCardProps> = ({ project, onOpen, onDelete, onTogglePublish, index, isTogglingPublish }) => {
   const [isHovered, setIsHovered] = React.useState(false);
   const [showMenu, setShowMenu] = React.useState(false);
 
@@ -175,6 +188,37 @@ const ProjectCard: React.FC<ProjectCardProps> = ({ project, onOpen, onDelete, in
                 <DuplicateIcon className="w-4 h-4" />
                 Duplicate
               </button>
+              {/* Publish Toggle Button */}
+              {onTogglePublish && (
+                <button 
+                  className={clsx(
+                    'w-full px-3 py-2 text-left text-sm text-text-primary hover:bg-background-hover flex items-center gap-2',
+                    project.status === 'Published' && 'text-accent-warning hover:bg-accent-warning/10'
+                  )}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onTogglePublish(project.id, project.status !== 'Published');
+                  }}
+                  disabled={isTogglingPublish}
+                >
+                  {isTogglingPublish ? (
+                    <>
+                      <span className="w-4 h-4 border-2 border-text-tertiary border-t-transparent rounded-full animate-spin" />
+                      Updating...
+                    </>
+                  ) : project.status === 'Published' ? (
+                    <>
+                      <CloudArrowDownIcon className="w-4 h-4" />
+                      Unpublish
+                    </>
+                  ) : (
+                    <>
+                      <CloudArrowUpIcon className="w-4 h-4" />
+                      Publish
+                    </>
+                  )}
+                </button>
+              )}
               <div className="border-t border-border-subtle" />
               <button 
                 className="w-full px-3 py-2 text-left text-sm text-accent-danger hover:bg-accent-danger/10 flex items-center gap-2"

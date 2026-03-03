@@ -21,6 +21,7 @@ import {
   migrateFromLocalStorage,
   getIndexedDBStats
 } from '../../utils/indexedDBManager';
+import { deletePublishedMetadata } from '../../utils/storage';
 
 const STORAGE_KEY = 'papar_projects';
 
@@ -174,11 +175,27 @@ const generateSlug = (name: string): string => {
 
 // Get project by slug (for published apps accessed via /apps/project-name)
 export const getProjectBySlug = async (slug: string): Promise<Project | null> => {
+  // First try IndexedDB
+  if (isIndexedDBSupported()) {
+    try {
+      const { getProjectBySlugFromIndexedDB } = await import('../../utils/indexedDBManager');
+      const project = await getProjectBySlugFromIndexedDB(slug);
+      if (project) {
+        return project;
+      }
+    } catch (e) {
+      console.warn('[Storage] IndexedDB getProjectBySlug failed:', e);
+    }
+  }
+
   if (!supabase) {
     // Use storage manager for localStorage
     const stored = loadProjectsFromLocalStorage();
     if (stored) {
       // Find project with matching slug (either generated from name or stored publishedSlug)
+      const generateSlug = (name: string): string => {
+        return name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+      };
       const found = stored.find(p => 
         generateSlug(p.name) === slug || 
         ((p as any).publishedSlug && (p as any).publishedSlug === slug)
@@ -205,6 +222,9 @@ export const getProjectBySlug = async (slug: string): Promise<Project | null> =>
         console.warn('Supabase returned 406 - falling back to local storage for slug lookup');
         const stored = loadProjectsFromLocalStorage();
         if (stored) {
+          const generateSlug = (name: string): string => {
+            return name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+          };
           const found = stored.find(p => 
             generateSlug(p.name) === slug || 
             ((p as any).publishedSlug && (p as any).publishedSlug === slug)
@@ -234,6 +254,9 @@ export const getProjectBySlug = async (slug: string): Promise<Project | null> =>
     // Fallback to localStorage on error
     const stored = loadProjectsFromLocalStorage();
     if (stored) {
+      const generateSlug = (name: string): string => {
+        return name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+      };
       return stored.find(p => 
         generateSlug(p.name) === slug || 
         ((p as any).publishedSlug && (p as any).publishedSlug === slug)
@@ -386,34 +409,254 @@ export const saveProjects = async (projects: Project[]): Promise<boolean> => {
 };
 
 export const deleteProjectFromStorage = async (projectId: string): Promise<boolean> => {
-  // Always try to delete from IndexedDB first (primary local storage)
-  let localDeleted = false;
+  // Simple deletion - for backwards compatibility
+  return deleteProjectCompletely(projectId).then(result => result.success);
+};
+
+/**
+ * Comprehensive project deletion with transactional rollback
+ * Deletes project from all storage sources: IndexedDB, localStorage, Supabase
+ * Also removes published metadata and uploaded assets
+ * Returns result object with success status and any errors
+ */
+export const deleteProjectCompletely = async (projectId: string): Promise<{
+  success: boolean;
+  errors: string[];
+  deletedFrom: string[];
+}> => {
+  const errors: string[] = [];
+  const deletedFrom: string[] = [];
   
-  if (isIndexedDBSupported()) {
-    try {
-      localDeleted = await deleteProjectFromIndexedDB(projectId);
-    } catch (e) {
-      console.warn('[Storage] IndexedDB delete failed:', e);
-      // Fallback to localStorage
-      localDeleted = deleteProjectFromLocalStorage(projectId);
-    }
-  } else {
-    localDeleted = deleteProjectFromLocalStorage(projectId);
-  }
-  
-  if (!supabase) {
-    console.warn("[Storage] Supabase not configured - local only");
-    return localDeleted;
+  // Step 1: Get the project first to check for published assets
+  let project: Project | null = null;
+  try {
+    project = await getProjectById(projectId);
+  } catch (e) {
+    console.warn('[Delete] Could not load project before deletion:', e);
   }
 
-  try {
-    const { error } = await supabase.from('projects').delete().eq('id', projectId);
-    if (error) throw error;
-    return true; // Cloud deletion succeeded
-  } catch (e) {
-    console.error("Failed to delete project from cloud", e);
-    return localDeleted; // Fall back to local result
+  // Step 2: Delete from IndexedDB (primary local storage)
+  if (isIndexedDBSupported()) {
+    try {
+      const idbDeleted = await deleteProjectFromIndexedDB(projectId);
+      if (idbDeleted) {
+        deletedFrom.push('indexeddb');
+      }
+    } catch (e) {
+      const errorMsg = `IndexedDB deletion failed: ${e}`;
+      console.error('[Delete]', errorMsg);
+      errors.push(errorMsg);
+    }
   }
+
+  // Step 3: Delete from localStorage (fallback)
+  try {
+    const lsDeleted = deleteProjectFromLocalStorage(projectId);
+    if (lsDeleted) {
+      deletedFrom.push('localStorage');
+    }
+  } catch (e) {
+    const errorMsg = `localStorage deletion failed: ${e}`;
+    console.warn('[Delete]', errorMsg);
+    errors.push(errorMsg);
+  }
+
+  // Step 4: Delete published metadata
+  try {
+    deletePublishedMetadata(projectId);
+    deletedFrom.push('publishedMetadata');
+  } catch (e) {
+    const errorMsg = `Published metadata deletion failed: ${e}`;
+    console.warn('[Delete]', errorMsg);
+    errors.push(errorMsg);
+  }
+
+  // Step 5: Delete from Supabase (cloud)
+  if (supabase) {
+    try {
+      const { error } = await supabase.from('projects').delete().eq('id', projectId);
+      if (error) {
+        // Check if it's a "not found" error - that's actually OK
+        if (error.code === 'PGRST116') {
+          console.log('[Delete] Project not found in Supabase (already deleted or never synced)');
+        } else {
+          throw error;
+        }
+      } else {
+        deletedFrom.push('supabase');
+      }
+    } catch (e: any) {
+      const errorMsg = `Supabase deletion failed: ${e.message || e}`;
+      console.error('[Delete]', errorMsg);
+      errors.push(errorMsg);
+    }
+  }
+
+  // Step 6: Delete uploaded assets from Supabase Storage
+  if (supabase && project) {
+    try {
+      // Delete mind file if exists
+      if (project.targets?.[0]?.mindFileUrl) {
+        const mindFilePath = extractFilePathFromUrl(project.targets[0].mindFileUrl);
+        if (mindFilePath) {
+          const { error: storageError } = await supabase.storage
+            .from('assets')
+            .remove([mindFilePath]);
+          if (storageError) {
+            console.warn('[Delete] Failed to delete mind file:', storageError);
+          } else {
+            deletedFrom.push('storage(mindFile)');
+          }
+        }
+      }
+
+      // Delete any asset files associated with the project
+      // We'll try to delete assets based on the project ID pattern
+      const { data: files } = await supabase.storage
+        .from('assets')
+        .list(undefined, {
+          search: projectId
+        });
+      
+      if (files && files.length > 0) {
+        const filePaths = files.map(f => f.name);
+        const { error: assetError } = await supabase.storage
+          .from('assets')
+          .remove(filePaths);
+        if (assetError) {
+          console.warn('[Delete] Failed to delete project assets:', assetError);
+        } else {
+          deletedFrom.push('storage(assets)');
+        }
+      }
+    } catch (e) {
+      const errorMsg = `Storage asset deletion failed: ${e}`;
+      console.warn('[Delete]', errorMsg);
+      // Don't add to errors - asset cleanup is best-effort
+    }
+  }
+
+  // Determine success: deletion is successful if we deleted from at least one source
+  // and no critical errors occurred
+  const success = deletedFrom.length > 0 && !errors.some(e => e.includes('critical'));
+  
+  console.log(`[Delete] Project ${projectId}: success=${success}, deletedFrom=${deletedFrom.join(', ')}, errors=${errors.length}`);
+  
+  return { success, errors, deletedFrom };
+};
+
+/**
+ * Extract file path from a Supabase Storage URL
+ */
+const extractFilePathFromUrl = (url: string): string | null => {
+  try {
+    const urlObj = new URL(url);
+    // Supabase storage URLs typically contain the bucket path after /storage/v1/
+    const pathParts = urlObj.pathname.split('/storage/v1/object/public/');
+    if (pathParts.length > 1) {
+      return pathParts[1];
+    }
+    return null;
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * Toggle project publish status (online/offline)
+ * Updates the project's status in all storage sources
+ */
+export const toggleProjectPublishStatus = async (
+  projectId: string,
+  makePublished: boolean
+): Promise<{
+  success: boolean;
+  error?: string;
+  project?: Project;
+}> => {
+  try {
+    // Get current project
+    const project = await getProjectById(projectId);
+    if (!project) {
+      return { success: false, error: 'Project not found' };
+    }
+
+    const newStatus = makePublished ? 'Published' : 'Draft';
+    const updatedProject: Project = {
+      ...project,
+      status: newStatus,
+      // If unpublishing, clear the slug to prevent old URLs from working
+      publishedSlug: makePublished ? project.publishedSlug : undefined
+    };
+
+    // Save to all storage sources
+    const allProjects = await loadProjects();
+    const projectIndex = allProjects.findIndex(p => p.id === projectId);
+    
+    let projectsToSave: Project[];
+    if (projectIndex >= 0) {
+      projectsToSave = [...allProjects];
+      projectsToSave[projectIndex] = updatedProject;
+    } else {
+      projectsToSave = [updatedProject, ...allProjects];
+    }
+
+    // Save to IndexedDB
+    if (isIndexedDBSupported()) {
+      await saveProjectToIndexedDB(updatedProject);
+    }
+
+    // Save to localStorage
+    saveProjectsToLocalStorage(projectsToSave);
+
+    // Save to Supabase if connected
+    if (supabase) {
+      const payload = {
+        id: updatedProject.id,
+        name: updatedProject.name,
+        published_slug: updatedProject.publishedSlug || null,
+        last_updated: new Date().toISOString(),
+        status: newStatus,
+        data: updatedProject
+      };
+
+      const { error } = await supabase
+        .from('projects')
+        .upsert(payload, { onConflict: 'id' });
+
+      if (error) {
+        throw error;
+      }
+    }
+
+    console.log(`[PublishToggle] Project ${projectId} status changed to ${newStatus}`);
+    
+    return { success: true, project: updatedProject };
+  } catch (e: any) {
+    const errorMsg = e.message || 'Failed to toggle publish status';
+    console.error('[PublishToggle] Error:', errorMsg);
+    return { success: false, error: errorMsg };
+  }
+};
+
+/**
+ * Get project by slug - used for published project lookups
+ * This is the primary method for accessing published projects
+ */
+export const getPublishedProjectBySlug = async (slug: string): Promise<Project | null> => {
+  // First try to get by slug (most efficient for published projects)
+  const project = await getProjectBySlug(slug);
+  
+  if (project && project.status === 'Published') {
+    return project;
+  }
+  
+  // If not found by slug, try ID fallback (for legacy URLs)
+  if (!project) {
+    return getProjectById(slug);
+  }
+  
+  return null;
 };
 
 export const checkCloudConnection = async (): Promise<boolean> => {

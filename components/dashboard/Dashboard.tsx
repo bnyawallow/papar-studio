@@ -8,6 +8,7 @@ import ProjectList from './ProjectList';
 import ConfirmationModal from '../editor/ConfirmationModal';
 import Sidebar from '../ui/Sidebar';
 import { Search, Plus, Cloud, CloudOff, Crown } from '../icons/Icons';
+import { toggleProjectPublishStatus } from '../../src/services/projectService';
 
 interface DashboardProps {
   projects: Project[];
@@ -15,6 +16,7 @@ interface DashboardProps {
   onCreateProject: (template: Template) => void;
   onOpenProject: (projectId: string) => void;
   onDeleteProject: (projectId: string) => void;
+  onUpdateProject: (project: Project) => void;
   isConnected: boolean;
   isLoading?: boolean;
 }
@@ -25,12 +27,14 @@ const Dashboard: React.FC<DashboardProps> = ({
     onCreateProject, 
     onOpenProject, 
     onDeleteProject,
+    onUpdateProject,
     isConnected,
     isLoading = false
 }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [projectToDelete, setProjectToDelete] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [togglingPublish, setTogglingPublish] = useState<string | null>(null);
 
   const handleDeleteClick = (projectId: string) => {
       setProjectToDelete(projectId);
@@ -41,6 +45,23 @@ const Dashboard: React.FC<DashboardProps> = ({
           onDeleteProject(projectToDelete);
           setProjectToDelete(null);
       }
+  };
+
+  // Handle publish toggle
+  const handleTogglePublish = async (projectId: string, makePublished: boolean) => {
+    setTogglingPublish(projectId);
+    try {
+      const result = await toggleProjectPublishStatus(projectId, makePublished);
+      if (result.success && result.project) {
+        onUpdateProject(result.project);
+      } else {
+        console.error('Failed to toggle publish status:', result.error);
+      }
+    } catch (e) {
+      console.error('Error toggling publish status:', e);
+    } finally {
+      setTogglingPublish(null);
+    }
   };
 
   // Filter projects by search query
@@ -134,7 +155,9 @@ const Dashboard: React.FC<DashboardProps> = ({
               projects={filteredProjects} 
               onOpenProject={onOpenProject} 
               onDeleteProject={handleDeleteClick}
+              onTogglePublish={handleTogglePublish}
               isLoading={isLoading}
+              togglingPublishId={togglingPublish}
             />
           </div>
         </div>

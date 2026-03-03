@@ -95,16 +95,24 @@ const AppRunner: React.FC = () => {
       try {
         setLoading(true);
         
-        // Try to find project by ID first, then by slug
-        let project = await getProjectById(id);
+        // Try to find project by slug first (primary method for /apps/slug URLs)
+        // Then fallback to ID for legacy URLs or direct ID access
+        let project = await getProjectBySlug(id);
         
-        // If not found by ID, try slug (for /apps/project-name URLs)
+        // If not found by slug, try ID (for legacy URLs or direct ID access)
         if (!project) {
-          project = await getProjectBySlug(id);
+          project = await getProjectById(id);
         }
 
         if (!project) {
           setError("Project not found. The project may not exist or has not been published yet.");
+          setLoading(false);
+          return;
+        }
+
+        // Check if project is published - if not, show appropriate message
+        if (project.status !== 'Published') {
+          setError("This project is currently offline. The owner needs to publish it to make it accessible.");
           setLoading(false);
           return;
         }

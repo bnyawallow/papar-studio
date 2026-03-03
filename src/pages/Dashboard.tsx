@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import DashboardComponent from '../../components/dashboard/Dashboard';
 import { Project, Template } from '../../types';
 import { getAllTemplates, ensureDefaultTracker, cloneTemplateProject } from '../services/templateService';
-import { loadProjects, saveProjects, checkCloudConnection, deleteProjectFromStorage } from '../services/projectService';
+import { loadProjects, saveProjects, checkCloudConnection, deleteProjectCompletely } from '../services/projectService';
 import Toast, { ToastType } from '../../components/ui/Toast';
 
 const Dashboard: React.FC = () => {
@@ -79,17 +79,23 @@ const Dashboard: React.FC = () => {
     const updatedProjects = projects.filter(p => p.id !== projectId);
     setProjects(updatedProjects);
 
-    // Persist deletion
-    const success = await deleteProjectFromStorage(projectId);
+    // Use comprehensive deletion that removes from all sources
+    const result = await deleteProjectCompletely(projectId);
     
-    if (success) {
+    if (result.success) {
         showToast("Project deleted successfully.", 'success');
     } else {
         // Rollback
         setProjects(previousProjects);
-        showToast("Failed to delete project.", 'error');
+        showToast("Failed to delete project: " + (result.errors[0] || 'Unknown error'), 'error');
     }
   }, [projects, showToast]);
+
+  const handleUpdateProject = useCallback((updatedProject: Project) => {
+    setProjects(prev => prev.map(p => 
+      p.id === updatedProject.id ? updatedProject : p
+    ));
+  }, []);
 
   if (!isMounted) {
     return (
@@ -108,6 +114,7 @@ const Dashboard: React.FC = () => {
         onCreateProject={handleCreateProject}
         onOpenProject={handleOpenProject}
         onDeleteProject={handleDeleteProject}
+        onUpdateProject={handleUpdateProject}
         isConnected={isConnected}
         isLoading={areProjectsLoading}
       />

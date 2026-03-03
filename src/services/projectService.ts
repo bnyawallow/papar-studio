@@ -8,9 +8,19 @@ import {
   loadProjectsFromLocalStorage,
   deleteProjectFromLocalStorage,
   isQuotaExceededError,
-  getStorageStats,
-  isStorageNearLimit
+  isStorageNearLimit,
+  getStorageStats as getLocalStorageStats
 } from '../../utils/storageManager';
+import {
+  saveProjectToIndexedDB,
+  saveProjectsToIndexedDB,
+  loadProjectsFromIndexedDB,
+  getProjectByIdFromIndexedDB,
+  deleteProjectFromIndexedDB,
+  isIndexedDBSupported,
+  migrateFromLocalStorage,
+  getIndexedDBStats
+} from '../../utils/indexedDBManager';
 
 const STORAGE_KEY = 'papar_projects';
 
@@ -35,6 +45,19 @@ export const subscribeToConnectionStatus = (listener: (status: ConnectionStatus)
 };
 
 export const loadProjects = async (): Promise<Project[]> => {
+  // First try IndexedDB (primary local storage)
+  if (isIndexedDBSupported()) {
+    try {
+      const idbProjects = await loadProjectsFromIndexedDB();
+      if (idbProjects.length > 0) {
+        return idbProjects;
+      }
+    } catch (e) {
+      console.warn('[Storage] IndexedDB load failed, trying localStorage:', e);
+    }
+  }
+
+  // Fallback to localStorage
   if (!supabase) {
     console.warn("Supabase not connected. Using local storage.");
     // Use storage manager for localStorage with quota handling
@@ -81,6 +104,18 @@ export const loadProjects = async (): Promise<Project[]> => {
 };
 
 export const getProjectById = async (id: string): Promise<Project | null> => {
+  // Try IndexedDB first (primary local storage)
+  if (isIndexedDBSupported()) {
+    try {
+      const project = await getProjectByIdFromIndexedDB(id);
+      if (project) {
+        return project;
+      }
+    } catch (e) {
+      console.warn('[Storage] IndexedDB getProjectById failed:', e);
+    }
+  }
+
   if (!supabase) {
     // Use storage manager for localStorage
     const stored = loadProjectsFromLocalStorage();
@@ -286,10 +321,15 @@ const processPendingSaves = async (): Promise<void> => {
 
 const saveProjectsToSupabase = async (projects: Project[]): Promise<boolean> => {
   if (!supabase) {
-    console.warn("[Storage] Supabase not configured - using local storage only");
-    // Save to localStorage with quota handling
-    const success = saveProjectsToLocalStorage(projects);
-    return success;
+    console.warn("[Storage] Supabase not configured - using IndexedDB primary storage");
+    // Save to IndexedDB with fallback to localStorage
+    if (isIndexedDBSupported()) {
+      const success = await saveProjectsToIndexedDB(projects);
+      if (success) return true;
+    }
+    // Final fallback to localStorage
+    const localSuccess = saveProjectsToLocalStorage(projects);
+    return localSuccess;
   }
 
   const payload = projects.map(p => ({
@@ -307,6 +347,12 @@ const saveProjectsToSupabase = async (projects: Project[]): Promise<boolean> => 
       .upsert(payload, { onConflict: 'id' });
 
     if (error) throw error;
+    
+    // Also save to IndexedDB for offline access
+    if (isIndexedDBSupported()) {
+      await saveProjectsToIndexedDB(projects);
+    }
+    
     return true;
   } catch (e) {
     console.error("Failed to save to Supabase", e);
@@ -340,21 +386,33 @@ export const saveProjects = async (projects: Project[]): Promise<boolean> => {
 };
 
 export const deleteProjectFromStorage = async (projectId: string): Promise<boolean> => {
-  // Always delete from localStorage first
-  const localDeleted = deleteProjectFromLocalStorage(projectId);
+  // Always try to delete from IndexedDB first (primary local storage)
+  let localDeleted = false;
+  
+  if (isIndexedDBSupported()) {
+    try {
+      localDeleted = await deleteProjectFromIndexedDB(projectId);
+    } catch (e) {
+      console.warn('[Storage] IndexedDB delete failed:', e);
+      // Fallback to localStorage
+      localDeleted = deleteProjectFromLocalStorage(projectId);
+    }
+  } else {
+    localDeleted = deleteProjectFromLocalStorage(projectId);
+  }
   
   if (!supabase) {
-    console.warn("[Storage] Supabase not configured - localStorage only");
+    console.warn("[Storage] Supabase not configured - local only");
     return localDeleted;
   }
 
   try {
     const { error } = await supabase.from('projects').delete().eq('id', projectId);
     if (error) throw error;
-    return true;
+    return true; // Cloud deletion succeeded
   } catch (e) {
-    console.error("Failed to delete project", e);
-    return false;
+    console.error("Failed to delete project from cloud", e);
+    return localDeleted; // Fall back to local result
   }
 };
 
@@ -419,4 +477,50 @@ export const uploadFileToStorage = async (file: File): Promise<string> => {
 
   const { data } = supabase.storage.from('assets').getPublicUrl(filePath);
   return data.publicUrl;
+};
+
+// Storage type for UI display
+export type StorageType = 'indexeddb' | 'localstorage' | 'supabase';
+
+// Get current storage type
+export const getCurrentStorageType = (): StorageType => {
+  if (supabase) return 'supabase';
+  if (isIndexedDBSupported()) return 'indexeddb';
+  return 'localstorage';
+};
+
+// Migrate from localStorage to IndexedDB
+export const migrateLocalStorageToIndexedDB = async (): Promise<{ migrated: number; failed: number }> => {
+  if (!isIndexedDBSupported()) {
+    console.warn('[Storage] IndexedDB not supported, cannot migrate');
+    return { migrated: 0, failed: 0 };
+  }
+  
+  return await migrateFromLocalStorage();
+};
+
+// Get storage statistics
+export const getStorageStats = async (): Promise<{
+  type: StorageType;
+  projectCount: number;
+  estimatedSizeKB: number;
+  idbStats?: { projectCount: number; estimatedSizeKB: number };
+}> => {
+  const type = getCurrentStorageType();
+  
+  if (type === 'indexeddb') {
+    const idbStats = await getIndexedDBStats();
+    return {
+      type,
+      ...idbStats
+    };
+  }
+  
+  // Fallback to localStorage stats
+  const localStats = getLocalStorageStats();
+  return {
+    type: 'localstorage',
+    projectCount: localStats.projectCount,
+    estimatedSizeKB: localStats.estimatedSizeKB
+  };
 };

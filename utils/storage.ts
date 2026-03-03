@@ -197,3 +197,73 @@ export {
   isStorageNearLimit,
   isQuotaExceededError
 } from './storageManager';
+
+// Published project metadata storage
+// This stores the publish URL and QR code data for previously published projects
+
+const PUBLISHED_METADATA_KEY = 'papar_published_metadata';
+
+export interface PublishedMetadata {
+  projectId: string;
+  publishUrl: string;
+  qrCodeDataUrl: string;
+  publishedSlug: string;
+  lastPublished: string; // ISO date string
+}
+
+// Get all published metadata from localStorage
+const getAllPublishedMetadata = (): Record<string, PublishedMetadata> => {
+  try {
+    const stored = localStorage.getItem(PUBLISHED_METADATA_KEY);
+    if (!stored) return {};
+    const parsed = JSON.parse(stored);
+    // Basic validation - ensure it's a valid object
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+      return {};
+    }
+    return parsed;
+  } catch (e) {
+    console.error('Failed to load published metadata:', e);
+    return {};
+  }
+};
+
+// Save published metadata to localStorage
+const saveAllPublishedMetadata = (metadata: Record<string, PublishedMetadata>): void => {
+  try {
+    localStorage.setItem(PUBLISHED_METADATA_KEY, JSON.stringify(metadata));
+  } catch (e) {
+    console.error('Failed to save published metadata:', e);
+  }
+};
+
+// Save published metadata for a specific project
+export const savePublishedMetadata = (
+  projectId: string,
+  publishUrl: string,
+  qrCodeDataUrl: string,
+  publishedSlug: string
+): void => {
+  const allMetadata = getAllPublishedMetadata();
+  allMetadata[projectId] = {
+    projectId,
+    publishUrl,
+    qrCodeDataUrl,
+    publishedSlug,
+    lastPublished: new Date().toISOString()
+  };
+  saveAllPublishedMetadata(allMetadata);
+};
+
+// Get published metadata for a specific project
+export const getPublishedMetadata = (projectId: string): PublishedMetadata | null => {
+  const allMetadata = getAllPublishedMetadata();
+  return allMetadata[projectId] || null;
+};
+
+// Delete published metadata for a specific project
+export const deletePublishedMetadata = (projectId: string): void => {
+  const allMetadata = getAllPublishedMetadata();
+  delete allMetadata[projectId];
+  saveAllPublishedMetadata(allMetadata);
+};

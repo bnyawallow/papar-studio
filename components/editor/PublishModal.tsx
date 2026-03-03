@@ -1,12 +1,13 @@
 
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Project } from '../../types';
 import { XMarkIcon, LinkIcon, QrCodeIcon } from '../icons/Icons';
 import { compileFiles } from '../../utils/compiler';
 import { ToastType } from '../ui/Toast';
 import { uploadFileToStorage } from '../../utils/storage';
+import { getPublishedMetadata, savePublishedMetadata } from '../../utils/storage';
 import { getProjectBySlug } from '../../src/services/projectService';
 import QRCode from 'qrcode';
 
@@ -30,7 +31,16 @@ const PublishModal: React.FC<PublishModalProps> = ({
   const [publishUrl, setPublishUrl] = useState<string | null>(null);
   const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null);
 
-  if (!isOpen) return null;
+  // Load stored publish data when modal opens
+  useEffect(() => {
+    if (isOpen && project.id) {
+      const storedMetadata = getPublishedMetadata(project.id);
+      if (storedMetadata) {
+        setPublishUrl(storedMetadata.publishUrl);
+        setQrCodeUrl(storedMetadata.qrCodeDataUrl);
+      }
+    }
+  }, [isOpen, project.id]);
 
   const handleCompile = async () => {
       // Check for duplicate slug before publishing
@@ -103,12 +113,17 @@ const PublishModal: React.FC<PublishModalProps> = ({
           setPublishUrl(viewerUrl);
 
           // Generate QR Code
+          let qrDataUrl = '';
           try {
             const qrData = await QRCode.toDataURL(viewerUrl, { width: 200, margin: 1 });
             setQrCodeUrl(qrData);
+            qrDataUrl = qrData;
           } catch (qrError) {
             console.error("Failed to generate QR", qrError);
           }
+          
+          // Save published metadata to localStorage
+          savePublishedMetadata(project.id, viewerUrl, qrDataUrl, projectSlug);
           
           onNotify("Compilation successful!", "success");
       } catch (e) {
@@ -144,6 +159,8 @@ const PublishModal: React.FC<PublishModalProps> = ({
     });
   };
 
+  if (!isOpen) return null;
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50" aria-modal="true" role="dialog">
       <div className="bg-white rounded-lg shadow-xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
@@ -171,7 +188,7 @@ const PublishModal: React.FC<PublishModalProps> = ({
                 )}
             </div>
 
-            {project.targets[0]?.mindFileUrl && (
+            {(project.targets[0]?.mindFileUrl || publishUrl) && (
                 <div className="space-y-4 pt-4 border-t">
                     <h4 className="font-semibold text-gray-700">2. Share & Download</h4>
                     

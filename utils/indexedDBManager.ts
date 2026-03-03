@@ -11,19 +11,57 @@ const DB_NAME = 'papar_studio';
 const DB_VERSION = 1;
 const PROJECTS_STORE = 'projects';
 
-// Connection caching for performance
+// Connection caching for performance - with proper state management
 let cachedDB: IDBDatabase | null = null;
 let dbOpenPromise: Promise<IDBDatabase> | null = null;
+let isConnectionValid: boolean = true;
+
+/**
+ * Check if the cached database connection is valid and ready
+ */
+const isDBConnectionValid = (): boolean => {
+  if (!cachedDB || !isConnectionValid) return false;
+  
+  try {
+    // Verify the connection is still usable by checking its state
+    // If we can create a transaction, it's still valid
+    const testTransaction = cachedDB.transaction(PROJECTS_STORE, 'readonly');
+    testTransaction.abort(); // We don't actually need it
+    return true;
+  } catch (e) {
+    console.warn('[IndexedDB] Cached connection invalid:', e);
+    return false;
+  }
+};
+
+/**
+ * Invalidate the cached connection (call on errors or context lost)
+ */
+const invalidateCache = (): void => {
+  isConnectionValid = false;
+  if (cachedDB) {
+    try {
+      cachedDB.close();
+    } catch (e) {
+      // Ignore close errors
+    }
+  }
+  cachedDB = null;
+  dbOpenPromise = null;
+};
 
 /**
  * Open and initialize the IndexedDB database
- * Uses connection caching for better performance
+ * Uses connection caching for better performance with proper state validation
  */
 const openDB = (): Promise<IDBDatabase> => {
-  // Return cached connection if available
-  if (cachedDB && cachedDB.name === DB_NAME && cachedDB.version === DB_VERSION) {
+  // Check if cached connection is valid
+  if (cachedDB && isDBConnectionValid()) {
     return Promise.resolve(cachedDB);
   }
+  
+  // Invalidate stale cache
+  invalidateCache();
   
   // Prevent multiple concurrent open requests
   if (dbOpenPromise) {
@@ -36,14 +74,28 @@ const openDB = (): Promise<IDBDatabase> => {
     request.onerror = () => {
       console.error('[IndexedDB] Failed to open database:', request.error);
       dbOpenPromise = null;
+      isConnectionValid = false;
       reject(request.error);
     };
 
     request.onsuccess = () => {
-      cachedDB = request.result;
+      const db = request.result;
+      
+      // Set up event handlers to detect connection issues
+      db.onclose = () => {
+        console.log('[IndexedDB] Database connection closed');
+        invalidateCache();
+      };
+      
+      db.onerror = (event) => {
+        console.error('[IndexedDB] Database error:', event);
+      };
+      
+      cachedDB = db;
+      isConnectionValid = true;
       dbOpenPromise = null;
       console.log('[IndexedDB] Database opened successfully');
-      resolve(request.result);
+      resolve(db);
     };
 
     request.onupgradeneeded = (event) => {
@@ -71,6 +123,13 @@ export const saveProjectToIndexedDB = async (project: Project): Promise<boolean>
   try {
     const db = await openDB();
     
+    // Check connection state before operation
+    if (!db || !isConnectionValid) {
+      console.warn('[IndexedDB] Database connection invalid, invalidating cache and retrying');
+      invalidateCache();
+      return saveProjectToIndexedDB(project); // Retry with fresh connection
+    }
+    
     return new Promise((resolve, reject) => {
       const transaction = db.transaction([PROJECTS_STORE], 'readwrite');
       const store = transaction.objectStore(PROJECTS_STORE);
@@ -93,12 +152,15 @@ export const saveProjectToIndexedDB = async (project: Project): Promise<boolean>
         reject(request.error);
       };
       
-      transaction.oncomplete = () => {
-        db.close();
+      // Don't close the connection - let it be reused
+      transaction.oncomplete = () => {};
+      transaction.onerror = () => {
+        console.error('[IndexedDB] Transaction error:', transaction.error);
       };
     });
   } catch (error) {
     console.error('[IndexedDB] Error saving project:', error);
+    invalidateCache();
     return false;
   }
 };
@@ -113,6 +175,13 @@ export const saveProjectsToIndexedDB = async (projects: Project[]): Promise<bool
   
   try {
     const db = await openDB();
+    
+    // Check connection state before operation
+    if (!db || !isConnectionValid) {
+      console.warn('[IndexedDB] Database connection invalid, invalidating cache and retrying');
+      invalidateCache();
+      return saveProjectsToIndexedDB(projects);
+    }
     
     return new Promise((resolve, reject) => {
       const transaction = db.transaction([PROJECTS_STORE], 'readwrite');
@@ -139,12 +208,18 @@ export const saveProjectsToIndexedDB = async (projects: Project[]): Promise<bool
       Promise.all(savePromises).then(results => {
         const allSucceeded = results.every(r => r);
         console.log(`[IndexedDB] Saved ${projects.length} projects, ${results.filter(r => !r).length} failed`);
-        transaction.oncomplete = () => db.close();
         resolve(allSucceeded);
       }).catch(reject);
+      
+      // Don't close the connection
+      transaction.oncomplete = () => {};
+      transaction.onerror = () => {
+        console.error('[IndexedDB] Transaction error:', transaction.error);
+      };
     });
   } catch (error) {
     console.error('[IndexedDB] Error saving projects:', error);
+    invalidateCache();
     return false;
   }
 };
@@ -155,6 +230,13 @@ export const saveProjectsToIndexedDB = async (projects: Project[]): Promise<bool
 export const loadProjectsFromIndexedDB = async (): Promise<Project[]> => {
   try {
     const db = await openDB();
+    
+    // Check connection state before operation
+    if (!db || !isConnectionValid) {
+      console.warn('[IndexedDB] Database connection invalid, invalidating cache and retrying');
+      invalidateCache();
+      return loadProjectsFromIndexedDB();
+    }
     
     return new Promise((resolve, reject) => {
       const transaction = db.transaction([PROJECTS_STORE], 'readonly');
@@ -188,12 +270,12 @@ export const loadProjectsFromIndexedDB = async (): Promise<Project[]> => {
         reject(request.error);
       };
       
-      transaction.oncomplete = () => {
-        db.close();
-      };
+      // Don't close the connection
+      transaction.oncomplete = () => {};
     });
   } catch (error) {
     console.error('[IndexedDB] Error loading projects:', error);
+    invalidateCache();
     return [];
   }
 };
@@ -204,6 +286,13 @@ export const loadProjectsFromIndexedDB = async (): Promise<Project[]> => {
 export const getProjectByIdFromIndexedDB = async (id: string): Promise<Project | null> => {
   try {
     const db = await openDB();
+    
+    // Check connection state before operation
+    if (!db || !isConnectionValid) {
+      console.warn('[IndexedDB] Database connection invalid, invalidating cache and retrying');
+      invalidateCache();
+      return getProjectByIdFromIndexedDB(id);
+    }
     
     return new Promise((resolve, reject) => {
       const transaction = db.transaction([PROJECTS_STORE], 'readonly');
@@ -226,12 +315,12 @@ export const getProjectByIdFromIndexedDB = async (id: string): Promise<Project |
         reject(request.error);
       };
       
-      transaction.oncomplete = () => {
-        db.close();
-      };
+      // Don't close the connection
+      transaction.oncomplete = () => {};
     });
   } catch (error) {
     console.error('[IndexedDB] Error getting project:', error);
+    invalidateCache();
     return null;
   }
 };
@@ -242,6 +331,13 @@ export const getProjectByIdFromIndexedDB = async (id: string): Promise<Project |
 export const deleteProjectFromIndexedDB = async (projectId: string): Promise<boolean> => {
   try {
     const db = await openDB();
+    
+    // Check connection state before operation
+    if (!db || !isConnectionValid) {
+      console.warn('[IndexedDB] Database connection invalid, invalidating cache and retrying');
+      invalidateCache();
+      return deleteProjectFromIndexedDB(projectId);
+    }
     
     return new Promise((resolve, reject) => {
       const transaction = db.transaction([PROJECTS_STORE], 'readwrite');
@@ -259,12 +355,12 @@ export const deleteProjectFromIndexedDB = async (projectId: string): Promise<boo
         reject(request.error);
       };
       
-      transaction.oncomplete = () => {
-        db.close();
-      };
+      // Don't close the connection
+      transaction.oncomplete = () => {};
     });
   } catch (error) {
     console.error('[IndexedDB] Error deleting project:', error);
+    invalidateCache();
     return false;
   }
 };
@@ -275,6 +371,13 @@ export const deleteProjectFromIndexedDB = async (projectId: string): Promise<boo
 export const clearIndexedDB = async (): Promise<boolean> => {
   try {
     const db = await openDB();
+    
+    // Check connection state before operation
+    if (!db || !isConnectionValid) {
+      console.warn('[IndexedDB] Database connection invalid, invalidating cache and retrying');
+      invalidateCache();
+      return clearIndexedDB();
+    }
     
     return new Promise((resolve, reject) => {
       const transaction = db.transaction([PROJECTS_STORE], 'readwrite');
@@ -292,12 +395,12 @@ export const clearIndexedDB = async (): Promise<boolean> => {
         reject(request.error);
       };
       
-      transaction.oncomplete = () => {
-        db.close();
-      };
+      // Don't close the connection
+      transaction.oncomplete = () => {};
     });
   } catch (error) {
     console.error('[IndexedDB] Error clearing database:', error);
+    invalidateCache();
     return false;
   }
 };
@@ -311,6 +414,13 @@ export const getIndexedDBStats = async (): Promise<{
 }> => {
   try {
     const db = await openDB();
+    
+    // Check connection state before operation
+    if (!db || !isConnectionValid) {
+      console.warn('[IndexedDB] Database connection invalid, invalidating cache and retrying');
+      invalidateCache();
+      return getIndexedDBStats();
+    }
     
     return new Promise((resolve, reject) => {
       const transaction = db.transaction([PROJECTS_STORE], 'readonly');
@@ -347,12 +457,12 @@ export const getIndexedDBStats = async (): Promise<{
         resolve({ projectCount: 0, estimatedSizeKB: 0 });
       };
       
-      transaction.oncomplete = () => {
-        db.close();
-      };
+      // Don't close the connection
+      transaction.oncomplete = () => {};
     });
   } catch (error) {
     console.error('[IndexedDB] Error getting stats:', error);
+    invalidateCache();
     return { projectCount: 0, estimatedSizeKB: 0 };
   }
 };

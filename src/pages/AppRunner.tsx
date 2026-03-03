@@ -118,7 +118,8 @@ const AppRunner: React.FC = () => {
         }
 
         // Generate HTML using the export utility
-        const generatedHtml = generateAFrameHtml(project, undefined, mindFileUrl);
+        // Enable debug by default for AppRunner so users can troubleshoot
+        const generatedHtml = generateAFrameHtml(project, undefined, mindFileUrl, true);
         
         // Inject debug message listener
         const htmlWithDebug = generatedHtml.replace(
@@ -260,7 +261,7 @@ const AppRunner: React.FC = () => {
         srcDoc={html}
         title="AR Experience"
         style={{ width: '100vw', height: '100vh', border: 'none' }}
-        sandbox="allow-scripts allow-popups allow-forms"
+        sandbox="allow-scripts allow-popups allow-forms allow-same-origin"
         onError={(e) => {
           console.error('iframe error:', e);
           setError('Failed to load AR experience. The project may contain invalid data.');

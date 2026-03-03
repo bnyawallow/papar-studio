@@ -5,7 +5,6 @@ import React, { useState } from 'react';
 import { Project } from '../../types';
 import { XMarkIcon, LinkIcon, QrCodeIcon } from '../icons/Icons';
 import { compileFiles } from '../../utils/compiler';
-import { generateProjectZip } from '../../utils/exportUtils';
 import { ToastType } from '../ui/Toast';
 import { uploadFileToStorage } from '../../utils/storage';
 import { getProjectBySlug } from '../../src/services/projectService';
@@ -145,31 +144,6 @@ const PublishModal: React.FC<PublishModalProps> = ({
     });
   };
 
-  // Handle download of ZIP file for the published web app
-  const handleDownloadZip = async () => {
-    const mindFileUrl = project.targets[0]?.mindFileUrl;
-    if (!mindFileUrl) {
-      onNotify("Please compile the project first.", 'error');
-      return;
-    }
-    
-    try {
-      const blob = await generateProjectZip(project, mindFileUrl);
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${project.name.replace(/\s+/g, '_')}.zip`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      onNotify("ZIP downloaded successfully!", 'success');
-    } catch(e) {
-      console.error(e);
-      onNotify("Failed to generate ZIP.", 'error');
-    }
-  };
-
   return (
     <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50" aria-modal="true" role="dialog">
       <div className="bg-white rounded-lg shadow-xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
@@ -229,14 +203,8 @@ const PublishModal: React.FC<PublishModalProps> = ({
                         </div>
                     )}
 
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 gap-4">
                         <button 
-                            onClick={handleDownloadZip}
-                            className="flex items-center justify-center gap-2 px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors text-sm font-medium"
-                        >
-                            Download ZIP
-                        </button>
-                         <button 
                             onClick={onClose}
                             className="flex items-center justify-center gap-2 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors text-sm font-medium"
                         >

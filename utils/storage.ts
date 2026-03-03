@@ -1,7 +1,7 @@
 
 import { Project } from '../types';
 import { supabase } from '../src/services/supabase';
-import { MOCK_PROJECTS } from '../data/mockData';
+import { MOCK_PROJECTS } from '../src/data/mockData';
 import { getContentType } from './contentType';
 import {
   saveProjectsToLocalStorage,

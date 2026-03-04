@@ -2,7 +2,7 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { getProjectById, getProjectBySlug } from '../services/projectService';
 import { Project } from '../../types';
-import { generateAFrameHtml } from '../../utils/exportUtils';
+import { generatePapARHtml } from '../../utils/exportUtils';
 
 interface DebugState {
   mindarLoaded: boolean;
@@ -42,7 +42,7 @@ const AppRunner: React.FC = () => {
     browserCapabilities: [],
   });
   
-  const debugRef = useRef<HTMLIFrameElement>(null);
+  const debugRef = useRef<HTMLDivElement>(null);
   const frameCountRef = useRef(0);
   const lastTimeRef = useRef(performance.now());
 
@@ -127,7 +127,15 @@ const AppRunner: React.FC = () => {
 
         // Generate HTML using the export utility
         // Enable debug by default for AppRunner so users can troubleshoot
-        const generatedHtml = generateAFrameHtml(project, undefined, mindFileUrl, true);
+        let generatedHtml;
+        try {
+          generatedHtml = generatePapARHtml(project, undefined, mindFileUrl, true);
+        } catch (err) {
+          setError("Failed to generate AR experience. The project data may be invalid.");
+          console.error("HTML generation error:", err);
+          setLoading(false);
+          return;
+        }
         
         // Inject debug message listener
         const htmlWithDebug = generatedHtml.replace(
@@ -263,17 +271,12 @@ const AppRunner: React.FC = () => {
 
   return (
     <div className="relative w-screen h-screen overflow-hidden">
-      {/* Main AR Experience */}
-      <iframe
+      {/* Main AR Experience - Direct HTML rendering (no iframe) */}
+      <div
         ref={debugRef}
-        srcDoc={html}
-        title="AR Experience"
-        style={{ width: '100vw', height: '100vh', border: 'none' }}
-        sandbox="allow-scripts allow-popups allow-forms allow-same-origin"
-        onError={(e) => {
-          console.error('iframe error:', e);
-          setError('Failed to load AR experience. The project may contain invalid data.');
-        }}
+        dangerouslySetInnerHTML={{ __html: html }}
+        className="w-screen h-screen overflow-hidden"
+        style={{ width: '100vw', height: '100vh' }}
       />
       
       {/* Debug Toggle Button */}

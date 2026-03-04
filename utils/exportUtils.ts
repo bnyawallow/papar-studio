@@ -291,7 +291,7 @@ export const generateScriptJson = (script: string | undefined): object => {
  * @param mindFileUrl - URL to the compiled mind file
  * @param enableDebug - Whether to enable debug overlay in the published app
  */
-export const generateAFrameHtml = (project: Project, localAssetMap?: Map<string, string>, mindFileUrl: string = './targets.mind', enableDebug: boolean = false): string => {
+export const generatePapARHtml = (project: Project, localAssetMap?: Map<string, string>, mindFileUrl: string = './targets.mind', enableDebug: boolean = false): string => {
     const config = project.mindARConfig || {
         maxTrack: 1,
         warmupTolerance: 5,
@@ -968,6 +968,47 @@ export const generateAFrameHtml = (project: Project, localAssetMap?: Map<string,
 export type ExportType = 'web' | 'ar';
 
 /**
+ * Generates the folder-based structure for a standalone AR app.
+ * Returns an object with the folder structure and file contents.
+ * This can be used to save to a server or generate a downloadable package.
+ * 
+ * @param project - The project to export
+ * @param mindFileUrl - URL to the compiled mind file
+ * @returns Object containing the folder structure and file contents
+ * 
+ * TODO: Integrate this function into the export pipeline for folder-based exports
+ *       See plans/standalone-ar-app-generation-plan.md for roadmap
+ */
+export const generateAppFolderStructure = (
+  project: Project,
+  mindFileUrl: string
+): {
+  indexHtml: string;
+  projectJson: string;
+  folderName: string;
+} => {
+  const slug = project.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+  
+  // Generate the standalone HTML
+  const html = generatePapARHtml(project, undefined, mindFileUrl, false);
+  
+  // Generate project.json for runtime reference (optional)
+  const projectJson = JSON.stringify({
+    id: project.id,
+    name: project.name,
+    targetCount: project.targets.length,
+    mindFileUrl: mindFileUrl,
+    generatedAt: new Date().toISOString()
+  }, null, 2);
+  
+  return {
+    indexHtml: html,
+    projectJson,
+    folderName: slug
+  };
+};
+
+/**
  * Generates a ZIP file for the project.
  * @param project - The project to export
  * @param mindFileUrl - URL to the compiled mind file
@@ -1092,7 +1133,7 @@ export const generateProjectZip = async (
     } else {
         // Web Export: Generate HTML with local paths
         // Note: We use the local path 'targets.mind' for the zip file reference
-        const htmlContent = generateAFrameHtml(project, localPathMap, './targets.mind');
+        const htmlContent = generatePapARHtml(project, localPathMap, './targets.mind');
         zip.file("index.html", htmlContent);
     }
 

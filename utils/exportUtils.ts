@@ -348,13 +348,18 @@ export const generatePapARHtml = (project: Project, localAssetMap?: Map<string, 
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 50px;
         cursor: pointer; box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
         transition: transform 0.2s, box-shadow 0.2s;
+        user-select: none; -webkit-tap-highlight-color: transparent; touch-action: manipulation;
     }
     #start-btn:hover {
         transform: translateY(-2px);
         box-shadow: 0 15px 40px rgba(102, 126, 234, 0.5);
     }
+    #start-btn:active {
+        transform: scale(0.95) translateY(0);
+        box-shadow: 0 5px 20px rgba(102, 126, 234, 0.3);
+    }
     #start-btn:disabled {
-        background: #666; cursor: not-allowed; transform: none;
+        background: #555; cursor: not-allowed; transform: scale(0.98); opacity: 0.8;
     }
     #loading-status { color: #aaa; margin-top: 15px; font-size: 14px; }
     .hidden { opacity: 0 !important; pointer-events: none !important; }

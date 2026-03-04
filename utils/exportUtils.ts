@@ -736,7 +736,7 @@ export const generatePapARHtml = (project: Project, localAssetMap?: Map<string, 
                     throw new Error('WebGL not supported');
                 }
                 debugLog('INFO', 'WEBGL', 'WebGL context created', { vendor: gl.getParameter(gl.VENDOR) });
-            } catch (e: any) {
+            } catch (e) {
                 debugLog('ERROR', 'WEBGL', 'WebGL not available', { error: e.message });
                 loadingStatus.innerText = 'Error: WebGL not supported';
                 startBtn.disabled = false;
@@ -847,7 +847,7 @@ export const generatePapARHtml = (project: Project, localAssetMap?: Map<string, 
             try {
                 await this.mindarThree.start();
                 debugLog('INFO', 'CAMERA', 'Camera started successfully', {});
-            } catch (e: any) {
+            } catch (e) {
                 debugLog('ERROR', 'CAMERA', 'Failed to start camera', { error: e.message });
                 loadingStatus.innerText = 'Error: ' + (e.message || 'Camera access denied');
                 startBtn.disabled = false;

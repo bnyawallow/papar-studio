@@ -374,15 +374,17 @@ export const generatePapARHtml = (project: Project, localAssetMap?: Map<string, 
     .mindar-ui-scanning { display: flex !important; }
   </style>
   
+  <!-- Load Three.js as ES module -->
   <script type="importmap">
   {
     "imports": {
       "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
-      "mindar-image-three": "https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-three.prod.js"
+      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
     }
   }
   </script>
+  <!-- Load MindAR as UMD script -->
+  <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-three.prod.js" crossorigin="anonymous"></script>
 </head>
 <body>
   <div id="container"></div>
@@ -397,10 +399,32 @@ export const generatePapARHtml = (project: Project, localAssetMap?: Map<string, 
   </div>
 
   <script type="module">
+    // Type declarations for globals
+    declare const MindARThree: any;
+    
+    // Three.js imports (ES modules)
     import * as THREE from 'three';
-    import { MindARThree } from 'mindar-image-three';
     import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
     import { CSS3DRenderer, CSS3DObject } from 'three/addons/renderers/CSS3DRenderer.js';
+    
+    // Wait for MindAR to be available (loaded via script tag)
+    const waitForMindAR = () => {
+        return new Promise((resolve, reject) => {
+            const checkInterval = setInterval(() => {
+                const MindARThree = (window as any).MINDAR?.IMAGE?.MindARThree;
+                if (MindARThree) {
+                    clearInterval(checkInterval);
+                    resolve(MindARThree);
+                }
+            }, 100);
+            
+            // Timeout after 10 seconds
+            setTimeout(() => {
+                clearInterval(checkInterval);
+                reject(new Error('MindAR library failed to load within 10 seconds'));
+            }, 10000);
+        });
+    };
 
     // --- Debug Helper ---
     const debugStartTime = performance.now();
@@ -423,6 +447,12 @@ export const generatePapARHtml = (project: Project, localAssetMap?: Map<string, 
                 elapsed: elapsed
             }, window.location.origin || '*');
         }
+    };
+
+    // Global error handler to catch any errors during loading
+    window.onerror = (msg, url, line, col, error) => {
+        debugLog('ERROR', 'GLOBAL', 'Uncaught error: ' + msg, { url, line, col, stack: error?.stack });
+        return false;
     };
 
     // --- Polyfills ---
@@ -727,6 +757,18 @@ export const generatePapARHtml = (project: Project, localAssetMap?: Map<string, 
         }
 
         async init() {
+            // Wait for MindAR library to be available
+            let MindARThree;
+            try {
+                MindARThree = await waitForMindAR();
+                debugLog('INFO', 'LIBRARY', 'MindAR library loaded successfully', {});
+            } catch (e) {
+                debugLog('ERROR', 'LIBRARY', 'Failed to load MindAR: ' + e.message, { error: e.message });
+                loadingStatus.innerText = 'Error: ' + e.message;
+                startBtn.disabled = false;
+                return;
+            }
+            
             startBtn.innerText = "Initializing...";
             startBtn.disabled = true;
             loadingStatus.innerText = "Loading MindAR library...";

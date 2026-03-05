@@ -42,7 +42,7 @@ const AppRunner: React.FC = () => {
     browserCapabilities: [],
   });
   
-  const debugRef = useRef<HTMLDivElement>(null);
+  const debugRef = useRef<HTMLIFrameElement>(null);
   const frameCountRef = useRef(0);
   const lastTimeRef = useRef(performance.now());
 
@@ -271,12 +271,17 @@ const AppRunner: React.FC = () => {
 
   return (
     <div className="relative w-screen h-screen overflow-hidden">
-      {/* Main AR Experience - Direct HTML rendering (no iframe) */}
-      <div
+      {/* Main AR Experience - Use iframe to properly execute scripts
+      Note: Sandbox permissions are required for self-generated AR content (camera access, scripts) */}
+      <iframe
         ref={debugRef}
-        dangerouslySetInnerHTML={{ __html: html }}
+        srcDoc={html}
         className="w-screen h-screen overflow-hidden"
-        style={{ width: '100vw', height: '100vh' }}
+        style={{ width: '100vw', height: '100vh', border: 'none' }}
+        title="AR Experience"
+        allow="camera; microphone; geolocation; xr-spatial-tracking"
+        // Sandbox: all content is self-generated, so same-origin is safe
+        sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
       />
       
       {/* Debug Toggle Button */}

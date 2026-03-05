@@ -383,8 +383,39 @@ export const generatePapARHtml = (project: Project, localAssetMap?: Map<string, 
     }
   }
   </script>
-  <!-- Load MindAR as UMD script -->
-  <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-three.prod.js" crossorigin="anonymous"></script>
+  
+  <!-- Pre-load MindAR with both CDN options for reliability -->
+  <script>
+    (function() {
+      console.log('[AR Init] Starting library load...');
+      
+      // Try loading MindAR from jsdelivr first
+      const loadMindAR = (src) => {
+        return new Promise((resolve, reject) => {
+          const script = document.createElement('script');
+          script.src = src;
+          script.crossOrigin = 'anonymous';
+          script.onload = () => {
+            console.log('[AR Init] MindAR loaded from:', src);
+            setTimeout(resolve, 200); // Wait for full initialization
+          };
+          script.onerror = () => {
+            console.error('[AR Init] Failed to load MindAR from:', src);
+            reject(new Error('Failed to load from ' + src));
+          };
+          document.head.appendChild(script);
+        });
+      };
+      
+      // Try primary CDN, fallback to unpkg
+      window.mindARLibsLoaded = loadMindAR('https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-three.prod.js')
+        .catch(() => loadMindAR('https://unpkg.com/mind-ar@1.2.5/dist/mindar-image-three.prod.js'))
+        .catch(() => {
+          console.error('[AR Init] All CDN options failed');
+          return Promise.resolve(); // Don't block forever
+        });
+    })();
+  </script>
 </head>
 <body>
   <div id="container"></div>
@@ -408,21 +439,37 @@ export const generatePapARHtml = (project: Project, localAssetMap?: Map<string, 
     import { CSS3DRenderer, CSS3DObject } from 'three/addons/renderers/CSS3DRenderer.js';
     
     // Wait for MindAR to be available (loaded via script tag)
-    const waitForMindAR = () => {
+    const waitForMindAR = async () => {
+        // First wait for our loading promise if it exists
+        if (window.mindARLibsLoaded) {
+            await window.mindARLibsLoaded;
+        }
+        
         return new Promise((resolve, reject) => {
+            let attempts = 0;
+            const maxAttempts = 100; // 100 * 100ms = 10 seconds
             const checkInterval = setInterval(() => {
-                const MindARThree = (window as any).MINDAR?.IMAGE?.MindARThree;
+                attempts++;
+                // Try multiple ways to access MindAR
+                const MindARThree = 
+                    (window as any).MINDAR?.IMAGE?.MindARThree ||
+                    (window as any).MindARThree ||
+                    (window as any).MINDAR?.IMAGE?.Three;
+                
                 if (MindARThree) {
                     clearInterval(checkInterval);
                     resolve(MindARThree);
+                } else if (attempts >= maxAttempts) {
+                    clearInterval(checkInterval);
+                    // Try one more time with different approach
+                    const alt = (window as any).MINDAR;
+                    if (alt) {
+                        resolve(alt.IMAGE?.MindARThree || alt.IMAGE?.Three);
+                    } else {
+                        reject(new Error('MindAR library failed to load within 10 seconds'));
+                    }
                 }
             }, 100);
-            
-            // Timeout after 10 seconds
-            setTimeout(() => {
-                clearInterval(checkInterval);
-                reject(new Error('MindAR library failed to load within 10 seconds'));
-            }, 10000);
         });
     };
 
@@ -437,7 +484,10 @@ export const generatePapARHtml = (project: Project, localAssetMap?: Map<string, 
         console.log('[AR ' + levelName + ' ' + timestamp + '] [' + category + '] ' + message, data || '');
         
         // Send to parent for debug overlay (only if enableDebug is true)
+        // Note: Using '*' for srcdoc iframes is acceptable since we control the content
         if (enableDebug && window.parent !== window) {
+            // Use * as targetOrigin for srcdoc iframes (origin is 'null' or unique)
+            const targetOrigin = (window.location.origin === 'null' || !window.location.origin) ? '*' : window.location.origin;
             window.parent.postMessage({ 
                 type: 'mindar-debug', 
                 level: levelName,
@@ -445,7 +495,7 @@ export const generatePapARHtml = (project: Project, localAssetMap?: Map<string, 
                 message: message,
                 data: data,
                 elapsed: elapsed
-            }, window.location.origin || '*');
+            }, targetOrigin);
         }
     };
 

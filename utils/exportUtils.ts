@@ -384,12 +384,12 @@ export const generatePapARHtml = (project: Project, localAssetMap?: Map<string, 
   }
   </script>
   
-  <!-- Pre-load MindAR with both CDN options for reliability -->
+  <!-- Pre-load MindAR with CDN fallback -->
   <script>
+    // Note: Using classic script (not module) because ES modules have CORS issues in srcdoc iframes
     (function() {
       console.log('[AR Init] Starting library load...');
       
-      // Try loading MindAR from jsdelivr first
       const loadMindAR = (src) => {
         return new Promise((resolve, reject) => {
           const script = document.createElement('script');
@@ -397,7 +397,11 @@ export const generatePapARHtml = (project: Project, localAssetMap?: Map<string, 
           script.crossOrigin = 'anonymous';
           script.onload = () => {
             console.log('[AR Init] MindAR loaded from:', src);
-            setTimeout(resolve, 200); // Wait for full initialization
+            // MindAR UMD is available at window.MINDAR
+            setTimeout(() => {
+              window.mindARLibsLoaded = Promise.resolve();
+              resolve();
+            }, 100);
           };
           script.onerror = () => {
             console.error('[AR Init] Failed to load MindAR from:', src);
@@ -412,7 +416,7 @@ export const generatePapARHtml = (project: Project, localAssetMap?: Map<string, 
         .catch(() => loadMindAR('https://unpkg.com/mind-ar@1.2.5/dist/mindar-image-three.prod.js'))
         .catch(() => {
           console.error('[AR Init] All CDN options failed');
-          return Promise.resolve(); // Don't block forever
+          window.mindARLibsLoaded = Promise.resolve();
         });
     })();
   </script>

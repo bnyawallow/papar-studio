@@ -42,7 +42,7 @@ const AppRunner: React.FC = () => {
     browserCapabilities: [],
   });
   
-  const debugRef = useRef<HTMLIFrameElement>(null);
+  const debugRef = useRef<HTMLDivElement>(null);
   const frameCountRef = useRef(0);
   const lastTimeRef = useRef(performance.now());
 
@@ -180,6 +180,73 @@ const AppRunner: React.FC = () => {
     fetchApp();
   }, [id]);
 
+  // Inject HTML and execute scripts when html changes
+  useEffect(() => {
+    if (!html || !debugRef.current) return;
+
+    const container = debugRef.current;
+    
+    // Parse the HTML and extract scripts
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
+    
+    // Get all scripts from the parsed HTML
+    const scripts = Array.from(doc.querySelectorAll('script'));
+    
+    // Remove all scripts from doc (we'll add them manually)
+    scripts.forEach(script => script.remove());
+    
+    // Get the HTML without scripts
+    const htmlWithoutScripts = doc.body.innerHTML;
+    
+    // Also get the head content (styles, etc)
+    const headContent = doc.head.innerHTML;
+    
+    // Set the HTML content (without scripts first)
+    container.innerHTML = htmlWithoutScripts;
+    
+    // Inject head styles
+    const styleContainer = document.createElement('div');
+    styleContainer.innerHTML = `<style>${headContent}</style>`;
+    container.prepend(styleContainer);
+    
+    // Function to execute a script and return a promise
+    const executeScript = (script: HTMLScriptElement): Promise<void> => {
+      return new Promise((resolve, reject) => {
+        const newScript = document.createElement('script');
+        
+        // Copy all attributes
+        Array.from(script.attributes).forEach(attr => {
+          newScript.setAttribute(attr.name, attr.value);
+        });
+        
+        // Copy inline script content
+        newScript.textContent = script.textContent;
+        
+        newScript.onload = () => resolve();
+        newScript.onerror = (e) => {
+          console.error('Script load error:', e);
+          resolve(); // Don't reject, just continue
+        };
+        
+        document.head.appendChild(newScript);
+      });
+    };
+    
+    // Execute all scripts sequentially
+    const runScripts = async () => {
+      for (const script of scripts) {
+        try {
+          await executeScript(script);
+        } catch (e) {
+          console.error('Script execution error:', e);
+        }
+      }
+    };
+    
+    runScripts();
+  }, [html]);
+
   // Handle messages from iframe
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
@@ -271,17 +338,11 @@ const AppRunner: React.FC = () => {
 
   return (
     <div className="relative w-screen h-screen overflow-hidden">
-      {/* Main AR Experience - Use iframe to properly execute scripts
-      Note: Sandbox permissions are required for self-generated AR content (camera access, scripts) */}
-      <iframe
-        ref={debugRef}
-        srcDoc={html}
+      {/* Main AR Experience - Use div with manual script injection */}
+      <div
+        ref={debugRef as any}
         className="w-screen h-screen overflow-hidden"
-        style={{ width: '100vw', height: '100vh', border: 'none' }}
-        title="AR Experience"
-        allow="camera; microphone; geolocation; xr-spatial-tracking"
-        // Sandbox: all content is self-generated, so same-origin is safe
-        sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
+        style={{ width: '100vw', height: '100vh' }}
       />
       
       {/* Debug Toggle Button */}

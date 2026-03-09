@@ -111,6 +111,14 @@ const PublishModal: React.FC<PublishModalProps> = ({
           });
           
           // Step 2: Generating HTML
+          setPublishProgress({ step: 'generating', progress: 45, message: 'Generating HTML...' });
+          setProgress(45);
+          
+          // Create Blob from compiled mind data
+          const mindBlob = new Blob([mindData], { type: 'application/octet-stream' });
+          const mindFile = new File([mindBlob], 'targets.mind', { type: 'application/octet-stream' });
+
+          // Step 3: Uploading to cloud
           setPublishProgress({ step: 'uploading', progress: 55, message: 'Uploading assets to cloud...' });
           setProgress(55);
 
